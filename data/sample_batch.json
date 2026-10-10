@@ -1,0 +1,23 @@
+{
+  "schema": "youtube-factory-external-visual-batch",
+  "version": 1,
+  "batch_revision": "sample-only",
+  "source_visual_manifest_revision": "sample-only",
+  "items": [
+    {
+      "order": 1,
+      "visual_id": "scene_0001_visual_001",
+      "generation_prompt": "Cinematic documentary-style 1981 boxing gym interior, empty ring under overhead lights, realistic photography, 16:9, no text, no logos."
+    },
+    {
+      "order": 2,
+      "visual_id": "scene_0002_visual_001",
+      "generation_prompt": "Close documentary-style photograph of worn vintage boxing gloves resting on a wooden bench in an early-1980s gym, realistic lighting, 16:9, no text."
+    },
+    {
+      "order": 3,
+      "visual_id": "scene_0003_visual_001",
+      "generation_prompt": "Wide realistic historical boxing arena atmosphere in the early 1980s, crowd surrounding a brightly lit ring, cinematic documentary photography, 16:9, no text or watermarks."
+    }
+  ]
+}

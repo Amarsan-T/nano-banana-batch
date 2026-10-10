@@ -1,0 +1,133 @@
+# Authenticated Chrome profiles and profile backups (including archives).
+.flow_chrome_profile*
+.browser_profile*
+chrome_profile*
+profile_backup*
+profile-backup*
+User Data/
+Cookies
+Cookies-journal
+Login Data
+Login Data-journal
+Local State
+Preferences
+Secure Preferences
+
+# Runs, generated assets, native downloads, and persisted runtime state.
+runs/
+assets/
+output/
+outputs/
+downloads/
+staging/
+*_staging/
+run_state*.json*
+*.crdownload
+
+# Local/private configurations. Only the reviewed public example is included.
+config*.json*
+!config.example.json
+private_config*/
+config_local.*
+config_private.*
+*.local.*
+*.private.*
+
+# Personal prompts and their backups. Reviewed sample batch JSON stays public.
+prompts/
+prompt_files/
+prompt_backups/
+prompt*.txt*
+prompt*.json*
+*.prompt
+*.prompts
+
+# Secrets, authentication exports, and credential stores.
+.env
+.env.*
+secrets/
+secret*.json*
+secret*.txt*
+credentials*
+client_secret*
+service-account*.json*
+service_account*.json*
+api_keys*
+cookies*.json*
+cookies*.txt*
+auth*.json*
+storage_state*.json*
+storage-state*.json*
+session*.json*
+token*.json*
+token*.txt*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kdbx
+*.sqlite*
+*.db
+.netrc
+.npmrc
+.pypirc
+.aws/
+.ssh/
+
+# Virtual environments and Python/build/test caches.
+.venv*/
+venv/
+env/
+ENV/
+__pypackages__/
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+build/
+dist/
+*.egg-info/
+
+# Logs, diagnostics, traces, scratch files, and backups.
+logs/
+*.log
+*.log.*
+diagnostics*/
+traces/
+*.har
+tmp/
+temp/
+.tmp/
+backups/
+backup/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+
+# Local editor/agent settings and operating-system metadata.
+.vscode/
+.idea/
+.codex/
+.agents/
+.history/
+.cache/
+.DS_Store
+Thumbs.db
+desktop.ini

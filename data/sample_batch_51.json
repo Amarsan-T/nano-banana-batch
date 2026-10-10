@@ -1,0 +1,467 @@
+{
+  "schema": "youtube-factory-external-visual-batch",
+  "version": 1,
+  "batch_revision": "sample-acceptance-51",
+  "source_visual_manifest_revision": "sample-acceptance-51",
+  "items": [
+    {
+      "order": 1,
+      "visual_id": "acceptance_0001_visual_001",
+      "prompt": "Wide realistic photograph of an empty vintage boxing gym with a quiet ring beneath warm overhead lights, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 2,
+      "visual_id": "acceptance_0002_visual_001",
+      "prompt": "Close realistic photograph of old worn leather boxing gloves resting on a wooden bench in a softly lit vintage gym, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 3,
+      "visual_id": "acceptance_0003_visual_001",
+      "prompt": "Wide realistic photograph of an empty desert highway stretching toward distant mesas at a vivid sunset, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 4,
+      "visual_id": "acceptance_0004_visual_001",
+      "prompt": "Wide realistic photograph of a quiet mountain lake reflecting snow-dusted peaks at sunrise with soft mist, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 5,
+      "visual_id": "acceptance_0005_visual_001",
+      "prompt": "Moody realistic photograph of a vintage microphone alone in a dark recording studio under one soft spotlight, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 6,
+      "visual_id": "acceptance_0006_visual_001",
+      "prompt": "Wide realistic photograph of an empty vintage basketball gym with polished wood flooring and high windows, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 7,
+      "visual_id": "acceptance_0007_visual_001",
+      "prompt": "Wide realistic photograph of an empty outdoor tennis court after rain with reflective puddles and overcast light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 8,
+      "visual_id": "acceptance_0008_visual_001",
+      "prompt": "Close realistic photograph of a worn baseball glove and ball resting on an empty wooden dugout bench, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 9,
+      "visual_id": "acceptance_0009_visual_001",
+      "prompt": "Close realistic photograph of a metal stopwatch and simple whistle arranged on a weathered wooden table, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 10,
+      "visual_id": "acceptance_0010_visual_001",
+      "prompt": "Wide realistic photograph of a winding mountain road surrounded by vivid autumn trees under soft afternoon light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 11,
+      "visual_id": "acceptance_0011_visual_001",
+      "prompt": "Wide realistic photograph of an empty road disappearing through a foggy pine forest in cool morning light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 12,
+      "visual_id": "acceptance_0012_visual_001",
+      "prompt": "Wide realistic photograph of a clear river winding through a rocky canyon under bright natural daylight, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 13,
+      "visual_id": "acceptance_0013_visual_001",
+      "prompt": "Wide realistic photograph of snowcapped alpine mountains beneath dramatic layered clouds and crisp natural light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 14,
+      "visual_id": "acceptance_0014_visual_001",
+      "prompt": "Wide realistic photograph of a silent pine forest covered in fresh snow beneath pale winter sunlight, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 15,
+      "visual_id": "acceptance_0015_visual_001",
+      "prompt": "Wide realistic photograph of a rustic wooden cabin standing alone in a snowy forest clearing at twilight, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 16,
+      "visual_id": "acceptance_0016_visual_001",
+      "prompt": "Wide realistic photograph of a small weathered coastal cottage above the sea on a bright windy morning, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 17,
+      "visual_id": "acceptance_0017_visual_001",
+      "prompt": "Wide realistic photograph of a grand old library reading room with tall shelves and warm window light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 18,
+      "visual_id": "acceptance_0018_visual_001",
+      "prompt": "Wide realistic photograph of an empty photography studio with a plain canvas backdrop and soft side lighting, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 19,
+      "visual_id": "acceptance_0019_visual_001",
+      "prompt": "Close realistic photograph of a vintage tabletop radio resting on a simple wooden shelf in warm ambient light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 20,
+      "visual_id": "acceptance_0020_visual_001",
+      "prompt": "Realistic photograph of a classic film camera on a tripod inside a quiet studio with soft directional light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 21,
+      "visual_id": "acceptance_0021_visual_001",
+      "prompt": "Wide realistic photograph of an unbranded roadside diner exterior at dawn with blank sign panels and warm windows, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 22,
+      "visual_id": "acceptance_0022_visual_001",
+      "prompt": "Wide realistic photograph of a closed rural gas station at blue hour with blank pumps and no visible signage, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 23,
+      "visual_id": "acceptance_0023_visual_001",
+      "prompt": "Wide realistic photograph of an empty train platform disappearing into gentle morning fog beneath old lamps, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 24,
+      "visual_id": "acceptance_0024_visual_001",
+      "prompt": "Wide realistic photograph of an empty cobblestone city street after rain at night with reflections and unreadable blank storefronts, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 25,
+      "visual_id": "acceptance_0025_visual_001",
+      "prompt": "Wide realistic photograph of a sunlit empty hotel hallway with repeating doors and soft geometric shadows, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 26,
+      "visual_id": "acceptance_0026_visual_001",
+      "prompt": "Wide realistic photograph of a quiet empty classroom with wooden desks and a clean blank chalkboard, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 27,
+      "visual_id": "acceptance_0027_visual_001",
+      "prompt": "Wide realistic photograph of a steel bridge spanning a broad river beneath dramatic late-afternoon clouds, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 28,
+      "visual_id": "acceptance_0028_visual_001",
+      "prompt": "Wide realistic photograph of a weathered wooden pier extending over calm blue water in early morning light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 29,
+      "visual_id": "acceptance_0029_visual_001",
+      "prompt": "Wide realistic photograph of a small fishing harbor at first light with plain boats reflected in still water, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 30,
+      "visual_id": "acceptance_0030_visual_001",
+      "prompt": "Wide realistic photograph of a red rock desert with wind-shaped dunes beneath a deep blue sky, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 31,
+      "visual_id": "acceptance_0031_visual_001",
+      "prompt": "Wide realistic photograph of a rugged coastline with ocean waves striking dark cliffs under moody clouds, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 32,
+      "visual_id": "acceptance_0032_visual_001",
+      "prompt": "Wide realistic photograph of a golden wheat field moving beneath distant storm clouds in late-afternoon light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 33,
+      "visual_id": "acceptance_0033_visual_001",
+      "prompt": "Wide realistic photograph of long rows of lavender in bloom at dusk beneath a soft pastel sky, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 34,
+      "visual_id": "acceptance_0034_visual_001",
+      "prompt": "Close realistic photograph of an open blank notebook and a fountain pen on a clean wooden desk by window light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 35,
+      "visual_id": "acceptance_0035_visual_001",
+      "prompt": "Close realistic photograph of an antique typewriter holding a completely blank sheet of paper in a quiet study, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 36,
+      "visual_id": "acceptance_0036_visual_001",
+      "prompt": "Top-down realistic photograph of an unlabeled folded road map beside a brass compass on a wooden table, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 37,
+      "visual_id": "acceptance_0037_visual_001",
+      "prompt": "Realistic photograph of a vintage travel suitcase resting alone on an empty station bench in soft morning light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 38,
+      "visual_id": "acceptance_0038_visual_001",
+      "prompt": "Wide realistic photograph of a white lighthouse on a windswept cliff above a deep blue sea, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 39,
+      "visual_id": "acceptance_0039_visual_001",
+      "prompt": "Wide realistic photograph of a remote wooden fire lookout tower rising above an evergreen forest at sunset, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 40,
+      "visual_id": "acceptance_0040_visual_001",
+      "prompt": "Wide realistic photograph of a tall waterfall descending through a lush green rainforest in diffused daylight, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 41,
+      "visual_id": "acceptance_0041_visual_001",
+      "prompt": "Wide realistic photograph of a frozen river crossing a broad winter valley beneath pale mountains, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 42,
+      "visual_id": "acceptance_0042_visual_001",
+      "prompt": "Wide realistic photograph inside a glass greenhouse filled with lush green plants and soft morning light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 43,
+      "visual_id": "acceptance_0043_visual_001",
+      "prompt": "Wide realistic photograph of a quiet pottery studio with clay vessels arranged on a sturdy worktable, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 44,
+      "visual_id": "acceptance_0044_visual_001",
+      "prompt": "Macro realistic photograph of intricate mechanical watch gears arranged on a dark craft workbench, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 45,
+      "visual_id": "acceptance_0045_visual_001",
+      "prompt": "Wide realistic photograph of an antique brass telescope inside a domed observatory beneath dim blue light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 46,
+      "visual_id": "acceptance_0046_visual_001",
+      "prompt": "Wide realistic photograph of an empty theater stage beneath warm spotlights and closed dark curtains, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 47,
+      "visual_id": "acceptance_0047_visual_001",
+      "prompt": "Close realistic photograph of a vintage reel-to-reel tape machine in a dim recording studio with blank controls, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 48,
+      "visual_id": "acceptance_0048_visual_001",
+      "prompt": "Close realistic photograph of a ceramic coffee cup beside a rain-streaked window in soft natural light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 49,
+      "visual_id": "acceptance_0049_visual_001",
+      "prompt": "Wide realistic photograph of a simple wooden rowboat floating on a misty lake at dawn, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 50,
+      "visual_id": "acceptance_0050_visual_001",
+      "prompt": "Wide realistic photograph of an old windmill standing in open grassland during a golden sunset, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    },
+    {
+      "order": 51,
+      "visual_id": "acceptance_0051_visual_001",
+      "prompt": "Wide realistic photograph of a stone archway opening onto a quiet Mediterranean courtyard with warm afternoon light, documentary-style realistic photography, cinematic 16:9 composition, no people, no text, no logos.",
+      "mode": "image",
+      "aspect_ratio": "16:9",
+      "preferred_model_hint": "Nano Banana 2",
+      "variants": 2
+    }
+  ]
+}

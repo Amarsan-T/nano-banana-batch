@@ -1,0 +1,15 @@
+{
+  "flow_url": "https://flow.google.com/project/REPLACE_WITH_PROJECT_ID",
+  "browser_profile_dir": ".flow_chrome_profile",
+  "debug_address": "127.0.0.1",
+  "debug_port": 9222,
+  "diagnostics_path": "diagnostics/flow_inspect.png",
+  "prestart_timing_debug": false,
+  "generation": {
+    "mode": "image",
+    "aspect_ratio": "16:9",
+    "preferred_model_hint": "Nano Banana 2",
+    "variants": 2,
+    "result_timeout_seconds": 300
+  }
+}

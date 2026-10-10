@@ -1,0 +1,33 @@
+{
+  "schema": "youtube-factory-external-visual-batch",
+  "version": 1,
+  "batch_revision": "sample-acceptance-5",
+  "source_visual_manifest_revision": "sample-acceptance-5",
+  "items": [
+    {
+      "order": 1,
+      "visual_id": "acceptance_0001_visual_001",
+      "generation_prompt": "Wide realistic photograph of an empty vintage boxing gym with a quiet ring beneath warm overhead lights, cinematic composition, 16:9, no people, no text, no logos."
+    },
+    {
+      "order": 2,
+      "visual_id": "acceptance_0002_visual_001",
+      "generation_prompt": "Close realistic photograph of old worn leather boxing gloves resting on a wooden bench in a softly lit vintage gym, cinematic composition, 16:9, no people, no text, no logos."
+    },
+    {
+      "order": 3,
+      "visual_id": "acceptance_0003_visual_001",
+      "generation_prompt": "Wide realistic photograph of an empty desert highway stretching toward distant mesas at a vivid sunset, cinematic natural light, 16:9, no people, no vehicles, no text, no logos."
+    },
+    {
+      "order": 4,
+      "visual_id": "acceptance_0004_visual_001",
+      "generation_prompt": "Wide realistic photograph of a quiet mountain lake reflecting snow-dusted peaks at sunrise, soft mist and natural light, cinematic composition, 16:9, no people, no text, no logos."
+    },
+    {
+      "order": 5,
+      "visual_id": "acceptance_0005_visual_001",
+      "generation_prompt": "Moody realistic photograph of a vintage microphone alone in a dark recording studio under one soft spotlight, cinematic composition, 16:9, no people, no text, no logos."
+    }
+  ]
+}
