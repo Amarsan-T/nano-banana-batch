@@ -423,3 +423,232 @@ checkout, profiles, live Flow sessions, and private runtime data were neither
 accessed nor modified. The owner's saved review diff was preserved. Nothing was
 staged, committed, pushed, published, or connected to a remote. Work stops for the
 owner's review before additional production optimization or a Git commit.
+
+## Stage 2.2: interrupted download commit recovery
+
+### Developer participation and verified contribution history
+
+The independent developer's hands-on Python contribution includes studying the
+existing code and writing the source/RunState lookup, candidate selection by
+variant, non-unique-match rejection, explicit candidate identity check, and use of
+the UUID ownership helper. The saved working tree independently confirms this
+initial validator draft. The developer also worked through the reasoning behind
+these checks before delegating completion and integration. Codex retained those
+parts and
+completed validation, persistence integration, recovery, corrections, and offline
+tests under the developer's direction.
+
+The distinction between discussion drafts and saved code matters. At the previous
+preparation checkpoint, Codex had left `validate_pending_download_ownership()`
+absent and prepared the schema, fixture, guide, and deliberately failing tests.
+At the completion checkpoint on 2026-10-11, `runner.py` contained the partial
+function described above. Its pending-record expression was unfinished, and an
+indentation error prevented import. These are verified repository observations;
+the exact additional snippets drafted during discussion are not available in this
+repository review and are not attributed as saved implementation. Codex corrected
+the indentation and completed the unfinished checks. The final implementation is
+not represented as wholly authored by the developer, nor is uncertain historical
+code attributed solely to either participant.
+
+The architecture and schema were discussed collaboratively. The developer reviewed
+and approved durable pending evidence, independent source/state identity, unique
+UUID ownership, both attempt counters, project proof, path containment, earlier
+persisted integrity metadata, no-overwrite recovery, conservative legacy handling,
+and idempotence. The developer then explicitly delegated completion and integration
+to Codex while retaining final diff and commit approval.
+
+### Verified gap and final implementation
+
+The retained regressions reproduce interruption after actual canonical JPEG
+installation and before candidate completion reaches disk. Before integration,
+both Resume cases refused the untracked file, despite completed generation and
+the unchanged persisted candidate. The original negative test also preserves the
+refusal to adopt unrelated valid JPEG bytes. No regression was removed or weakened.
+
+`PendingDownloadCommit` record version 1 lives on `CandidateRecord`. Atomic save of
+an active record promotes run-state version to 6 in the same replacement; the
+in-memory version changes only after success. Missing/null records remain loadable,
+empty fields are omitted, ordinary legacy saves do not migrate, and clearing a
+record retains version 6. Unsupported/malformed active records are rejected.
+
+The validator independently selects a unique source and saved Order, preserving
+the original source-prompt binding after a policy edit. It requires a unique
+variant, explicit canonical UUID, global UUID ownership, an unconflicted asset URL,
+completed generation, running download states, no conflicting completion metadata,
+saved project ownership, and matching Batch/project/Order/visual/variant/UUID and
+positive integer attempt counters. Canonical naming comes from the recorded byte
+format. Paths must match exact relative layouts and resolve under the trusted run
+without symlink/junction aliases. Other candidates' saved local/relative paths,
+every Order's outputs, and competing pending records are examined globally for
+claims on either file or a conflicting canonical extension. Malformed, escaping,
+or inconsistent path evidence fails closed. Premature canonical or staging output
+registration is rejected. This function
+does not decode images, modify state, install files, or require file availability.
+
+New project-owned downloads save expected content and ownership before canonical
+installation. Image format, MIME, dimensions, byte size, and SHA-256 are persisted
+from validated staging bytes. Normal completion and local recovery use one shared
+atomic candidate save: completed metadata and `output_files` are written together
+with removal of the pending record. In-memory completion is published only after
+that replacement succeeds. Failed completion saves retain the running receipt;
+staging cleanup also preserves outstanding pending evidence.
+
+Resume planning remains read-only. Execution reconciles pending records before
+incrementing another download attempt. Every available canonical/staging file must
+match the earlier persisted metadata. A matching canonical file needs no install;
+staging-only recovery uses the existing exclusive commit with `overwrite=False`.
+Missing both files, conflicting extensions/content/ownership, or changed paths
+stop without candidate completion. Filesystem safety is checked again around
+installation and before completion persistence. Existing Order-finalization checks
+remain in place. Local reconciliation neither regenerates nor downloads from Flow,
+changes project/UUID identity, increments attempt counters, nor consumes retries.
+When another variant still needs downloading, only that variant enters the normal
+download path and receives the existing new-download attempt increment.
+
+States without pending records retain the existing untracked-file guards. Legacy
+records without saved project proof cannot reconcile automatically. Generic legacy
+adapters without UUID evidence retain their established download path and do not
+gain orphan adoption. An active pending record cannot be bypassed with `--overwrite`.
+An interrupted explicit replacement that retains conflicting old completion
+metadata also fails closed, as required by the validator contract.
+
+### Regression refinement and validation
+
+The saved partial draft initially failed import. After the indentation correction,
+the validator contract still failed as expected, and the two real-file recovery
+regressions demonstrated the original gap before integration. An initial recovery
+test invocation encountered sandbox default-temp permissions; subsequent commands
+and new fixtures put synthetic temporary data inside the public ignored `.tmp`.
+
+Additional adversarial tests exposed and corrected two completion issues during
+implementation. First, completion must persist the same metadata observation that
+matched the pending evidence, rather than an earlier independent canonical read.
+That test failed before the correction and now passes; completion also checks the
+metadata against the record immediately before preparing its atomic save. Second,
+staging paths registered as output and duplicate pending-file claims must be
+rejected. Those focused negative cases failed before the checks were added and
+now pass. The tests remain in the suite.
+
+The first full run reported 50 errors from old project-owned fixtures using
+non-UUID candidate names. Codex updated the synthetic adapters in `test_app.py`,
+`test_flow_projects.py`, and `test_flow_explicit_failures.py` to use distinct
+synthetic UUIDs; identity/forbidden-set assertions retain exact comparisons.
+Production UUID validation was not relaxed. One obsolete completed-run version-4
+assertion was updated to exactly version 6, reflecting the approved migration.
+All 25 project tests then passed. These fixture corrections preserve the tested
+generation, failure, retry, project, and cancellation behavior.
+
+Offline validation before the final adversarial review:
+
+- Focused validator, codec, pending recovery, and commit-boundary tests: 61 passed.
+- Runner, interrupted Order-finalization, and post-generation cancellation: 99
+  passed. The full suite also covers the corrected CLI, policy, unusual-activity,
+  generic-failure, High Demand, project, and observer-recovery fixtures.
+- Full suite: 1,032 passed in 106.722 seconds, zero failures, errors, or skips.
+- Python compilation and `git diff --check`: passed. No embedded JavaScript was
+  changed; the existing Node-based regressions passed in the full suite.
+- Existing invalid-escape test-harness SyntaxWarning remains unchanged. Browser
+  operations in tests are mocked; no real Chrome, CDP, or Flow was accessed.
+
+### Limits and review boundary
+
+The record binds expected content and logical ownership. It does not
+cryptographically prove which physical process installed identical bytes. Repeated
+path/content checks do not prevent an external filesystem mutation after the last
+check. The sequential runner still assumes one writer for a run; concurrent-run
+locking is not introduced here.
+
+The separate non-atomic exclusive-copy fallback defect is unchanged. If interrupted
+copying leaves a partial canonical file, recovery detects mismatching bytes and
+protects the file even when valid staging survives. It never overwrites that file
+to improve success rate. Recovery may leave old staging files/directories behind;
+it does not perform recursive cleanup after clearing their receipt. Real Flow
+acceptance remains unverified. No additional Stage 2.1 performance optimization
+was implemented.
+
+The public workspace and repository root were verified. Work remained on `main`
+at `482909b`; the separate production checkout, private runtime data, profiles,
+and live browser sessions were neither inspected nor modified. Nothing was staged,
+committed, pushed, published, or connected to a remote. Stage 2.2 stops for the
+developer's final diff review and explicit approval of a third Git commit.
+
+### Final review correction: global file-claim ownership
+
+During the developer-requested adversarial review, Codex reproduced a missing
+ownership check: direct recovery could adopt a canonical path claimed by another
+completed candidate, and sequential Resume could complete recovery while another
+completed Order registered that same file in `output_files`. Unique UUID ownership
+does not prove unique local file ownership. The independent developer reviewed the
+finding, blocked the third commit, and authorized a narrow Stage 2.2 correction.
+
+Before changing production recovery logic, Codex added two real-file regressions
+through the existing synthetic fixture and real state codec. Both failed with
+`ValueError not raised`, demonstrating the vulnerable paths. Both now reject the
+conflicts before installing files, updating completion state, or calling a browser.
+
+Codex added `_assert_pending_download_file_claims()` to the contextual validator.
+It examines all saved Order outputs, other candidates' local/relative file claims
+(including stale metadata on incomplete downloads), and other pending records.
+Relative claims use the trusted run root. Absolute claims must stay within it;
+malformed, traversing, drive-relative, escaping, or inconsistent claims fail closed.
+Resolved aliases, Windows case differences, duplicate registrations of the target,
+and competing canonical extensions cannot conceal ownership conflicts. Unrelated
+valid completed metadata and its matching output registration remain legitimate.
+The selected receipt is the permitted claim; completed metadata or premature
+registration for that still-pending candidate remains prohibited.
+
+Recovery now reloads saved state immediately before installation and completion
+persistence, reruns ownership/path checks, and rejects a changed receipt. Completion
+uses that fresh snapshot. Tests verify that a late conflicting claim blocks each
+boundary and that a newly saved unrelated completion is preserved. No retry loop,
+lock, generation change, or download behavior change was added.
+
+The developer-written lookup, variant selection loop, non-unique-match rejection,
+explicit candidate check, and UUID helper call are retained unchanged by this
+correction. The replaced path-claim checks and recovery plumbing were Codex's
+subsequent implementation. Codex implemented the global correction and new tests;
+the developer's actual hands-on implementation and decision to withhold commit
+approval remain separately attributed.
+
+The expanded regressions also cover read-only validation, relative/backslash/case
+aliases, simulated symlink/junction aliases, malformed and escaping claims, stale
+completed-file metadata, pending/staging conflicts, legitimate unrelated downloads,
+repeated rejection, and successful recovery idempotency. Existing pending-record,
+integrity, atomic save, legacy orphan, no-overwrite, and cancellation tests remain.
+
+Verification after the global ownership correction:
+
+- The two original conflict scenarios: both failed before the production correction
+  (0.668 seconds), then both passed afterward (0.450 seconds). Rejection assertions
+  verify unchanged saved state/assets, no installation, and no browser calls.
+- All Stage 2.2 validator, state codec, recovery, and commit-boundary regressions:
+  78 passed in 15.825 seconds, including 17 added tests. Legitimate staging-only,
+  canonical-only, partial-Order, and unrelated-completed-download recovery pass.
+- Complete offline suite: 1,049 passed in 187.179 seconds; zero failures, errors,
+  or skips. Flow/launcher/CLI and existing Node regressions pass in that suite.
+- `compileall app.py nano_batch tests`: passed. `git diff --check` and separate
+  `git diff --no-index --check` checks of all six untracked files passed.
+
+The final adversarial review covered all eight tracked diffs and six untracked
+files, completed and pending file claims, duplicated target registrations, aliases,
+missing or inconsistent historical path evidence, fresh-state boundaries, receipt
+identity, atomic persistence, no-overwrite protection, and idempotency. No additional
+in-scope blocker was found. The source changes remain confined to the approved
+Stage 2.2 ownership and recovery architecture; generation/retry code, Flow adapter,
+and the existing file-installation helper were not changed by this correction.
+
+The global check establishes ownership of the pending files, not integrity of every
+unrelated historical asset. Completed candidates without sufficient path evidence,
+escaping paths, or contradictory path claims stop recovery conservatively. Real
+Windows symlink/junction creation was not exercised; alias resolution was simulated.
+Bounded state reloads do not provide compare-and-swap persistence or prevent another
+writer/filesystem mutation after the last check. The single-writer assumption,
+physical-writer limitation, partial-copy protection, and staging leftovers described
+above remain. Real Chrome/CDP/Flow behavior remains untested by this correction.
+
+Stage 2.2 is ready for the developer's final diff review within those stated limits.
+Workspace/root were verified again; branch remains `main`, HEAD remains `482909b`.
+Only the public checkout and disposable synthetic fixtures were used. The original
+project, private runtime data, credentials, profiles, and live browser sessions
+were neither accessed nor modified. Nothing was staged, committed, pushed,
+published, or connected to a remote. Work stops for explicit commit approval.

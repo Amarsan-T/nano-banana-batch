@@ -17,6 +17,7 @@ from .cancellation import (
     interruptible_call,
 )
 from .downloads import (
+    ValidatedImage,
     canonical_extension_for_image_format,
     commit_staged_file,
     deterministic_candidate_path,
@@ -48,6 +49,8 @@ from .models import (
     FlowProjectReference,
     GenerationResult,
     GenerationSettings,
+    PendingDownloadCommit,
+    PENDING_DOWNLOAD_COMMIT_STATE_VERSION,
     RunItemState,
     RunState,
 )
@@ -627,6 +630,214 @@ def _validate_recorded_download(candidate: CandidateRecord, destination: Path) -
         raise ValueError("completed download metadata does not match the validated local file")
 
 
+def validate_pending_download_ownership(
+    *,
+    batch: Batch,
+    state: RunState,
+    order: int,
+    variant: int,
+    run_dir: Path,
+) -> tuple[Path, Path]:
+    """Prove pending logical ownership and paths without reading image bytes."""
+    if type(order) is not int or order <= 0 or type(variant) is not int or variant <= 0:
+        raise ValueError("Order and variant must be positive integers.")
+    if state.batch_id != batch.batch_id:
+        raise ValueError("Pending download belongs to a different semantic batch.")
+    if (
+        len([item for item in batch.items if item.order == order]) != 1
+        or len([item for item in state.items if item.order == order]) != 1
+    ):
+        raise ValueError("Expected exactly one source and saved Order.")
+    source_item = resolve_item(batch, order)
+    state_item = _matching_run_item(state, source_item)
+
+    matches = []
+
+    for candidate in state_item.candidates:
+        if candidate.variant == variant:
+            matches.append(candidate)
+
+    if len(matches) != 1:
+        raise ValueError("Expected exactly one matching candidate")
+
+    state_candidate = matches[0]
+    if not isinstance(state_candidate.candidate_id, str) or not state_candidate.candidate_id:
+        raise ValueError("Candidate UUID must be a non-empty string")
+    _assert_unique_download_ownership(state, state_item, state_candidate)
+    pending = state_candidate.pending_download_commit
+    if not isinstance(pending, PendingDownloadCommit):
+        raise ValueError("A typed pending download record is required.")
+    pending.validate()
+    if type(state.version) is not int or state.version < PENDING_DOWNLOAD_COMMIT_STATE_VERSION:
+        raise ValueError("Pending download requires run-state version 6 or later.")
+    if (
+        state_item.status != "completed"
+        or not isinstance(state_item.completed_at, str) or not state_item.completed_at
+        or state_item.error is not None or state_item.generation_error_code is not None
+        or state_item.download_status != "running" or state_candidate.download_status != "running"
+        or state_item.download_error is not None or state_candidate.download_error is not None
+        or state_item.download_completed_at is not None
+    ):
+        raise ValueError("Pending download has conflicting generation or download state.")
+    if any(getattr(state_candidate, field) is not None for field in (
+        "local_path", "local_relative_path", "sha256", "byte_size", "width", "height",
+        "mime_type", "image_format", "downloaded_at",
+    )):
+        raise ValueError("Pending download conflicts with completed candidate metadata.")
+    if state.flow_project_required is not True or not isinstance(state.flow_project, FlowProjectReference):
+        raise ValueError("Automatic reconciliation requires saved project ownership.")
+    state.flow_project.validate()
+    identities = (
+        (pending.batch_id, batch.batch_id), (pending.project_id, state.flow_project.project_id),
+        (pending.order, state_item.order), (pending.visual_id, state_item.visual_id),
+        (pending.variant, state_candidate.variant), (pending.candidate_id, state_candidate.candidate_id),
+    )
+    if any(recorded != expected for recorded, expected in identities):
+        raise ValueError("Pending download ownership does not match authoritative state.")
+    for recorded, expected in (
+        (pending.order, state_item.order), (pending.order, source_item.order),
+        (pending.variant, state_candidate.variant),
+        (pending.generation_attempt_count, state_item.attempt_count),
+        (pending.download_attempt_count, state_item.download_attempt_count),
+    ):
+        if type(expected) is not int or expected <= 0 or recorded != expected:
+            raise ValueError("Pending download Order, variant or attempt counters conflict.")
+    if state_candidate.asset_url is not None and not isinstance(state_candidate.asset_url, str):
+        raise ValueError("Recorded asset identity must be a string or null.")
+    url_id = _persisted_candidate_id(replace(state_candidate, candidate_id=None))
+    if url_id is not None and url_id != state_candidate.candidate_id:
+        raise ValueError("Persisted candidate UUID conflicts with its recorded asset identity.")
+    canonical, staged = _pending_download_paths(pending, state_item, run_dir)
+    _assert_pending_download_file_claims(state, state_candidate, run_dir, canonical, staged)
+    return canonical, staged
+
+
+def _assert_pending_download_file_claims(
+    state: RunState, selected: CandidateRecord, run_dir: Path, canonical: Path, staged: Path,
+) -> None:
+    """Reject competing saved file claims, independently of candidate UUID ownership."""
+    root = run_dir.resolve()
+
+    def resolve_claim(value, *, relative_only=False):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Saved file ownership paths must be non-empty strings.")
+        path = Path(value)
+        if ".." in path.parts or (
+            (path.drive or path.root) and (relative_only or not path.is_absolute())
+        ):
+            raise ValueError("Saved file ownership path is ambiguous or contains traversal.")
+        lexical = path if path.is_absolute() else root / path
+        try:
+            # Reject lexical escapes before resolving an unrelated external path.
+            lexical.relative_to(root)
+            resolved = lexical.resolve()
+            resolved.relative_to(root)
+        except (OSError, RuntimeError, ValueError) as exc:
+            raise ValueError("Saved file ownership path cannot be proven inside the run.") from exc
+        return resolved
+
+    def conflicts(path):
+        return path in (canonical, staged) or (
+            path.parent == canonical.parent and path.stem == canonical.stem
+        )
+
+    for saved_item in state.items:
+        if not isinstance(saved_item.output_files, list):
+            raise ValueError("Saved Order output ownership must be a list of paths.")
+        for path in saved_item.output_files:
+            if conflicts(resolve_claim(path)):
+                # The selected candidate is still pending, so even its own Order
+                # cannot legitimately have registered either file as completed.
+                raise ValueError("Pending download file is already registered in Order output_files.")
+        for other in saved_item.candidates:
+            if other is selected:
+                continue
+            local_paths = []
+            for field in ("local_path", "local_relative_path"):
+                value = getattr(other, field)
+                if value is not None:
+                    local_paths.append(resolve_claim(value, relative_only=field == "local_relative_path"))
+            if other.download_status == "completed" and not local_paths:
+                raise ValueError("Completed candidate lacks file ownership path evidence.")
+            if len(local_paths) == 2 and local_paths[0] != local_paths[1]:
+                raise ValueError("Candidate local file ownership paths conflict.")
+            if any(conflicts(path) for path in local_paths):
+                raise ValueError("Pending download file is already claimed by another candidate.")
+            if other.pending_download_commit is None:
+                continue
+            other_pending = other.pending_download_commit
+            if not isinstance(other_pending, PendingDownloadCommit):
+                raise ValueError("Saved pending download metadata is not typed.")
+            other_pending.validate()
+            if any(conflicts(path) for path in _pending_download_paths(other_pending, saved_item, root)):
+                raise ValueError("Multiple pending candidates claim the same file path.")
+
+
+def _pending_download_paths(
+    pending: PendingDownloadCommit, item: RunItemState, run_dir: Path,
+) -> tuple[Path, Path]:
+    """Enforce exact lexical layouts and reject resolved filesystem aliases."""
+    filename = output_basename(
+        item.order, item.visual_id, pending.variant,
+        canonical_extension_for_image_format(pending.image_format),
+    )
+    if pending.canonical_relative_path != f"assets/{filename}":
+        raise ValueError("Pending canonical path is not the deterministic candidate path.")
+    staging_pattern = rf"assets/\.staging-[a-z0-9_-]+/v{pending.variant:02d}\.download"
+    if not re.fullmatch(staging_pattern, pending.staging_relative_path):
+        raise ValueError("Pending staging path does not match its permitted layout.")
+    try:
+        root = run_dir.resolve()
+        assets = root / "assets"
+        canonical = deterministic_candidate_path(root, filename)
+        staged_lexical = root / pending.staging_relative_path
+        staged = staged_lexical.resolve()
+        if (
+            assets.resolve() != assets or canonical != assets / filename
+            or staged_lexical.parent.resolve() != staged_lexical.parent or staged != staged_lexical
+        ):
+            raise ValueError("Pending download paths contain symlink/junction redirection.")
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("Pending download paths cannot be safely resolved.") from exc
+    try:
+        canonical.relative_to(root)
+        staged.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("Pending download path escapes the trusted run root.") from exc
+    if canonical == staged:
+        raise ValueError("Pending canonical and staging paths overlap.")
+    return canonical, staged
+
+
+def _validate_pending_download_content(
+    pending: PendingDownloadCommit, canonical: Path, staged: Path,
+) -> ValidatedImage:
+    """Compare available files to earlier persisted evidence, never a new digest alone."""
+    available = [path for path in (canonical, staged) if path.exists()]
+    if not available:
+        raise ValueError("Pending download has no available canonical or staging file.")
+    metadata = []
+    for path in available:
+        try:
+            actual = interruptible_call(
+                "download_reconciliation", "pending_image_validation",
+                validate_image_file, path, expected_filename=canonical.name,
+            )
+            if any(getattr(actual, field) != getattr(pending, field) for field in (
+                "sha256", "byte_size", "image_format", "mime_type", "width", "height",
+            )):
+                raise ValueError("File integrity does not match the persisted pending record.")
+        except Exception as exc:
+            if path == canonical:
+                raise FileExistsError(
+                    f"Refusing to overwrite untracked candidate asset: {canonical}. "
+                    "Its bytes do not match the persisted pending download evidence."
+                ) from exc
+            raise ValueError("Pending staging file does not match persisted image evidence.") from exc
+        metadata.append(actual)
+    return metadata[0]
+
+
 def plan_download_one(
     batch: Batch,
     run_dir: Path,
@@ -686,7 +897,17 @@ def plan_download_one(
         seen_destinations.add(stem)
 
         action = "download"
-        if candidate.download_status == "completed":
+        if candidate.pending_download_commit is not None:
+            if overwrite:
+                raise ValueError("Reconcile pending downloads without --overwrite first.")
+            destination, staged = validate_pending_download_ownership(
+                batch=batch, state=state, order=order, variant=candidate.variant, run_dir=run_dir,
+            )
+            if existing_destination is not None and existing_destination != destination:
+                raise FileExistsError("Pending download conflicts with an existing canonical extension.")
+            _validate_pending_download_content(candidate.pending_download_commit, destination, staged)
+            action = "recover_pending"
+        elif candidate.download_status == "completed":
             if existing_destination is not None and existing_destination != destination:
                 raise ValueError(
                     f"Candidate v{candidate.variant:02d} metadata extension does not match its canonical asset."
@@ -725,6 +946,109 @@ def plan_download_one(
         candidates=tuple(plans),
         asset_dir=(run_dir / "assets").resolve(),
     )
+
+
+def _persist_download_completion(
+    state: RunState, item: RunItemState, candidate: CandidateRecord, destination: Path,
+    metadata: ValidatedImage, browser_result: BrowserDownloadResult, run_dir: Path,
+) -> None:
+    """Complete one candidate and clear its receipt in a single atomic replacement."""
+    if candidate.pending_download_commit is not None and any(
+        getattr(metadata, field) != getattr(candidate.pending_download_commit, field)
+        for field in ("sha256", "byte_size", "width", "height", "mime_type", "image_format")
+    ):
+        raise ValueError("Completion metadata does not match the persisted pending evidence.")
+    completed = copy.deepcopy(state)
+    completed_item = next(entry for entry in completed.items if entry.order == item.order)
+    completed_candidate = next(entry for entry in completed_item.candidates if entry.variant == candidate.variant)
+    downloaded_at = utc_now()
+    completed_candidate.download_status = "completed"
+    completed_candidate.suggested_filename = destination.name
+    completed_candidate.candidate_id = browser_result.candidate_id
+    completed_candidate.browser_suggested_filename = browser_result.browser_suggested_filename
+    completed_candidate.browser_download_guid = browser_result.browser_download_guid
+    completed_candidate.download_mechanism = browser_result.mechanism
+    completed_candidate.local_path = str(destination)
+    completed_candidate.local_relative_path = str(destination.relative_to(run_dir.resolve()))
+    for field in ("sha256", "byte_size", "width", "height", "mime_type", "image_format"):
+        setattr(completed_candidate, field, getattr(metadata, field))
+    completed_candidate.downloaded_at = downloaded_at
+    completed_candidate.download_error = None
+    completed_candidate.pending_download_commit = None
+    completed_item.output_files = [
+        entry.local_path for entry in completed_item.candidates
+        if entry.download_status == "completed" and entry.local_path
+    ]
+    completed.updated_at = downloaded_at
+    interruptible_call(
+        "download_completion_persistence", "candidate_completion_save",
+        RunStateStore(run_dir / "run_state.json").save, completed,
+    )
+    # Keep caller references intact, but only publish completion after durable save.
+    candidate.__dict__.update(completed_candidate.__dict__)
+    item.output_files = completed_item.output_files
+    state.updated_at = completed.updated_at
+    state.version = completed.version
+
+
+def _reconcile_pending_downloads(batch: Batch, run_dir: Path, plan: DownloadPlan) -> DownloadPlan:
+    """Recover saved receipts locally before starting any new download attempt."""
+    root = run_dir.resolve()
+    for candidate_plan in plan.candidates:
+        if candidate_plan.action != "recover_pending":
+            continue
+        cancellation_checkpoint("download_reconciliation")
+        state = RunStateStore(root / "run_state.json").load()
+        item = _matching_run_item(state, resolve_item(batch, plan.item.order))
+        candidate = next(entry for entry in item.candidates if entry.variant == candidate_plan.candidate.variant)
+        pending = candidate.pending_download_commit
+
+        def checked_paths(*, refresh_state=False):
+            nonlocal state, item, candidate
+            if root.resolve() != root:
+                raise ValueError("Trusted run root changed during pending recovery.")
+            if refresh_state:
+                state = RunStateStore(root / "run_state.json").load()
+            paths = validate_pending_download_ownership(
+                batch=batch, state=state, order=plan.item.order,
+                variant=candidate_plan.candidate.variant, run_dir=root,
+            )
+            if paths[0] != candidate_plan.destination:
+                raise ValueError("Pending candidate destination changed during recovery.")
+            if refresh_state:
+                item = _matching_run_item(state, resolve_item(batch, plan.item.order))
+                candidate = next(entry for entry in item.candidates if entry.variant == candidate_plan.candidate.variant)
+                if candidate.pending_download_commit != pending:
+                    raise ValueError("Pending download evidence changed during recovery.")
+            return paths
+
+        canonical, staged = checked_paths()
+        _validate_pending_download_content(pending, canonical, staged)
+        if not canonical.exists():
+            # Repeat path/content checks immediately around the exclusive install.
+            if checked_paths() != (canonical, staged):
+                raise ValueError("Pending download paths changed before installation.")
+            _validate_pending_download_content(pending, canonical, staged)
+            if checked_paths(refresh_state=True) != (canonical, staged):
+                raise ValueError("Pending download ownership or paths changed before installation.")
+            interruptible_call(
+                "download_atomic_commit", "pending_canonical_commit",
+                commit_staged_file, staged, canonical, overwrite=False,
+            )
+        if checked_paths() != (canonical, staged):
+            raise ValueError("Pending download paths changed after installation.")
+        metadata = _validate_pending_download_content(pending, canonical, staged)
+        if not canonical.is_file() or checked_paths(refresh_state=True) != (canonical, staged):
+            raise ValueError("Pending canonical file or path changed before completion.")
+        _persist_download_completion(
+            state, item, candidate, canonical, metadata,
+            BrowserDownloadResult(
+                candidate_id=pending.candidate_id, staged_path=str(staged),
+                browser_suggested_filename=pending.browser_suggested_filename,
+                browser_download_guid=pending.browser_download_guid, mechanism=pending.download_mechanism,
+            ), root,
+        )
+    return plan_download_one(batch, root, plan.item.order)
 
 
 def _reconcile_download_finalization(
@@ -1013,12 +1337,12 @@ def execute_repair_order_candidates(
 
 
 @contextmanager
-def _download_staging_directory(asset_dir: Path):
+def _download_staging_directory(asset_dir: Path, *, preserve: Callable[[], bool] | None = None):
     temporary = tempfile.TemporaryDirectory(prefix=".staging-", dir=asset_dir)
     try:
         yield temporary.name
     finally:
-        if cancellation_requested():
+        if cancellation_requested() or (preserve is not None and preserve()):
             # Chrome may still be writing. Do not enter recursive filesystem
             # cleanup during intentional unwind, including the GC finalizer.
             temporary._finalizer.detach()
@@ -1042,6 +1366,8 @@ def execute_download_one(
 ) -> tuple[RunState, RunItemState]:
     """Download and persist candidates one at a time without changing generation status."""
     plan = plan_download_one(batch, run_dir, order, overwrite=overwrite)
+    if any(candidate.action == "recover_pending" for candidate in plan.candidates):
+        plan = _reconcile_pending_downloads(batch, run_dir, plan)
     state = plan.state
     state_item = plan.item
     store = RunStateStore(run_dir / "run_state.json")
@@ -1062,7 +1388,10 @@ def execute_download_one(
     store.save(state)
 
     plan.asset_dir.mkdir(parents=True, exist_ok=True)
-    with _download_staging_directory(plan.asset_dir) as temp_dir:
+    with _download_staging_directory(
+        plan.asset_dir,
+        preserve=lambda: any(candidate.pending_download_commit is not None for candidate in state_item.candidates),
+    ) as temp_dir:
         staging_dir = Path(temp_dir).resolve()
         for candidate_plan in plan.candidates:
             candidate = candidate_plan.candidate
@@ -1083,7 +1412,7 @@ def execute_download_one(
                 )
                 if Path(browser_result.staged_path).resolve() != staged_path:
                     raise RuntimeError("Browser adapter returned an unexpected staging path.")
-                if candidate.candidate_id and candidate.candidate_id != browser_result.candidate_id:
+                if _persisted_candidate_id(candidate) != browser_result.candidate_id:
                     raise RuntimeError("Downloaded candidate identity changed unexpectedly.")
                 staged_metadata = interruptible_call(
                     "download_file_validation",
@@ -1109,6 +1438,36 @@ def execute_download_one(
                         "Existing candidate asset uses a different extension than the validated download; "
                         "refusing to leave ambiguous canonical files."
                     )
+                # Legacy generic adapters may lack a UUID. They retain their old
+                # download path and never gain automatic orphan reconciliation.
+                has_uuid = isinstance(browser_result.candidate_id, str) and re.fullmatch(
+                    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                    browser_result.candidate_id,
+                )
+                if has_uuid or state.flow_project_required:
+                    pending_record = PendingDownloadCommit(
+                        record_version=1, batch_id=state.batch_id,
+                        project_id=state.flow_project.project_id if state.flow_project is not None else None,
+                        order=state_item.order, visual_id=state_item.visual_id, variant=candidate.variant,
+                        candidate_id=browser_result.candidate_id,
+                        generation_attempt_count=state_item.attempt_count,
+                        download_attempt_count=state_item.download_attempt_count,
+                        canonical_relative_path=final_destination.relative_to(run_dir.resolve()).as_posix(),
+                        staging_relative_path=staged_path.relative_to(run_dir.resolve()).as_posix(),
+                        sha256=staged_metadata.sha256, byte_size=staged_metadata.byte_size,
+                        image_format=staged_metadata.image_format, mime_type=staged_metadata.mime_type,
+                        width=staged_metadata.width, height=staged_metadata.height,
+                        download_mechanism=browser_result.mechanism,
+                        browser_suggested_filename=browser_result.browser_suggested_filename,
+                        browser_download_guid=browser_result.browser_download_guid,
+                    )
+                    pending_record.validate()
+                    candidate.pending_download_commit = pending_record
+                    interruptible_call(
+                        "download_pending_persistence", "pending_download_save", store.save, state,
+                    )
+                    if _pending_download_paths(pending_record, state_item, run_dir) != (final_destination, staged_path):
+                        raise ValueError("Pending paths changed before canonical installation.")
                 interruptible_call(
                     "download_atomic_commit",
                     "atomic_canonical_commit",
@@ -1127,33 +1486,22 @@ def execute_download_one(
                     final_destination,
                     expected_filename=final_filename,
                 )
-                downloaded_at = utc_now()
-                candidate.download_status = "completed"
-                candidate.suggested_filename = final_filename
-                candidate.candidate_id = browser_result.candidate_id
-                candidate.browser_suggested_filename = browser_result.browser_suggested_filename
-                candidate.browser_download_guid = browser_result.browser_download_guid
-                candidate.download_mechanism = browser_result.mechanism
-                candidate.local_path = str(final_destination)
-                candidate.local_relative_path = str(
-                    final_destination.relative_to(run_dir.resolve())
+                if candidate.pending_download_commit is not None:
+                    if _pending_download_paths(candidate.pending_download_commit, state_item, run_dir) != (
+                        final_destination, staged_path,
+                    ):
+                        raise ValueError("Pending paths changed after canonical installation.")
+                    metadata = _validate_pending_download_content(
+                        candidate.pending_download_commit, final_destination, staged_path,
+                    )
+                _persist_download_completion(
+                    state, state_item, candidate, final_destination, metadata, browser_result, run_dir,
                 )
-                candidate.sha256 = metadata.sha256
-                candidate.byte_size = metadata.byte_size
-                candidate.width = metadata.width
-                candidate.height = metadata.height
-                candidate.mime_type = metadata.mime_type
-                candidate.image_format = metadata.image_format
-                candidate.downloaded_at = downloaded_at
-                candidate.download_error = None
-                state_item.output_files = [
-                    item.local_path
-                    for item in state_item.candidates
-                    if item.download_status == "completed" and item.local_path
-                ]
-                state.updated_at = downloaded_at
-                store.save(state)
             except Exception as exc:
+                if candidate.pending_download_commit is not None:
+                    # Keep the durable running receipt intact for local recovery.
+                    # Completion persistence failures must not invalidate it.
+                    raise
                 error = f"{type(exc).__name__}: {exc}"
                 candidate.download_status = "failed"
                 candidate.download_error = error
@@ -1850,7 +2198,9 @@ def execute_sequential_batch(
         else:
             cancellation_checkpoint("download_dispatch")
             execute_download_one(batch, run_dir, item.order, adapter)
-            download_outcome = "resumed" if previously_completed else "downloaded"
+            download_outcome = "resumed" if previously_completed or any(
+                candidate.action == "recover_pending" for candidate in pending_downloads
+            ) else "downloaded"
 
         completed_state = store.load()
         completed_item = _matching_run_item(completed_state, item)

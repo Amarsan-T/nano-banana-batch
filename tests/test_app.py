@@ -5,6 +5,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 from PIL import Image
 
@@ -33,7 +34,7 @@ class OfflinePromptAdapter:
             candidates=tuple(
                 DiscoveredCandidate(
                     source_kind="rendered-image",
-                    candidate_id=f"offline-order-{item.order}-v{variant:02d}",
+                    candidate_id=str(UUID(int=item.order * 100 + variant)),
                 )
                 for variant in range(1, settings.variants + 1)
             )

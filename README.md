@@ -239,6 +239,19 @@ Because the browser is an already-running Chrome instance attached through CDP w
 
 Flow candidate identity is the persisted `data-media-id` UUID. A transient rendered `https://flow.google.com/asb/...` source is neither persisted nor used for identity matching. Download failures include a safe stage code and bounded facts such as exact CDP window state, activation method and acknowledgement, required-background-flag status, page-lifecycle keepalive status, event counts, GUID, terminal state, and staging filenames; request URLs, raw browser command lines, headers, browser storage, and authentication data are excluded.
 
+Interrupted downloads with a saved pending commit record can recover locally on
+Resume. Before installing a project-owned candidate, the runner atomically saves
+its ownership, both attempt counters, expected paths, and image-integrity metadata.
+Recovery requires matching saved project/UUID ownership and checks available files
+against that earlier hash, size, format, MIME, and dimensions. It can finalize a
+matching canonical file or install matching staging bytes without overwriting an
+existing asset. Recovery checks file claims across all saved candidates, Order
+outputs, and pending records, and rechecks saved ownership before installation and
+completion persistence. It preserves generation and download attempt counts.
+Preview stays read-only; missing or conflicting evidence stops recovery. Old untracked files and
+legacy runs without project evidence are never adopted automatically. This record
+binds expected content and logical ownership, not the identity of the physical writer.
+
 ### Trace one Download trigger
 
 `trace-download-trigger` is a diagnostic command for an existing candidate, separate from `download-one`. It is currently restricted to candidate `v01`. It does not submit a prompt, change generation/download state, validate or commit a canonical asset, or advance the download attempt count. The required activation choice selects exactly one conservative input path (`locator`, stable-center `mouse`, or accessible `keyboard`), and the confirmation flag authorizes exactly one candidate-specific Flow Download activation:

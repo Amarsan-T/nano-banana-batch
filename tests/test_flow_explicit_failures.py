@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
+from uuid import UUID
 
 from PIL import Image
 
@@ -852,7 +853,7 @@ class PolicyFailureRunnerTests(unittest.TestCase):
                 raise RuntimeError("unknown synthetic generation failure")
             if step != "success":
                 raise AssertionError(f"unknown scripted step: {step}")
-            candidate_id = f"order-{item.order}-attempt-{attempt}-v01"
+            candidate_id = str(UUID(int=item.order * 10000 + attempt * 100 + 1))
             return GenerationResult(
                 candidates=(
                     DiscoveredCandidate(
@@ -1155,7 +1156,7 @@ class PolicyFailureRunnerTests(unittest.TestCase):
                     "generate",
                     2,
                     "prompt 2",
-                    frozenset({"order-1-attempt-2-v01"}),
+                    frozenset({str(UUID(int=10201))}),
                 ),
             )
             self.assertEqual(adapter.events[6][0], "download")
@@ -1417,8 +1418,8 @@ class PolicyFailureRunnerTests(unittest.TestCase):
                     variant=1,
                     suggested_filename="0001__visual_1__v01.png",
                     source_kind="rendered-image",
-                    candidate_id="persisted-order-1-v01",
-                    asset_url="https://flow-content.google/image/persisted-order-1-v01",
+                    candidate_id=str(UUID(int=10001)),
+                    asset_url=f"https://flow-content.google/image/{UUID(int=10001)}",
                 )
             ]
             RunStateStore(run_dir / "run_state.json").save(state)

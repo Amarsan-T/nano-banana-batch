@@ -14,6 +14,7 @@ VALID_STATUSES = {
     WAITING_FOR_FLOW_LIMIT_RESET,
 }
 VALID_DOWNLOAD_STATUSES = {"not_started", "running", "completed", "failed"}
+PENDING_DOWNLOAD_COMMIT_STATE_VERSION = 6
 _FLOW_PROJECT_ID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
@@ -71,6 +72,72 @@ class DiscoveredCandidate:
     signal: str | None = None
 
 
+@dataclass(frozen=True)
+class PendingDownloadCommit:
+    """Expected content and logical ownership, persisted before file installation.
+
+    Shape validation is deliberately separate from the owner's contextual
+    ownership/path validator. This record does not prove the physical writer.
+    """
+
+    record_version: int
+    batch_id: str
+    project_id: str | None
+    order: int
+    visual_id: str
+    variant: int
+    candidate_id: str
+    generation_attempt_count: int
+    download_attempt_count: int
+    canonical_relative_path: str
+    staging_relative_path: str
+    sha256: str
+    byte_size: int
+    image_format: str
+    mime_type: str
+    width: int
+    height: int
+    download_mechanism: str
+    browser_suggested_filename: str | None = None
+    browser_download_guid: str | None = None
+
+    def validate(self) -> None:
+        """Reject malformed fields without granting recovery eligibility."""
+        if type(self.record_version) is not int or self.record_version != 1:
+            raise ValueError("Unsupported pending download record version.")
+        for name in (
+            "batch_id", "visual_id", "candidate_id", "canonical_relative_path",
+            "staging_relative_path", "sha256", "image_format", "mime_type",
+            "download_mechanism",
+        ):
+            value = getattr(self, name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"Pending download {name} must be a non-empty string.")
+        for name in (
+            "order", "variant", "generation_attempt_count", "download_attempt_count",
+            "byte_size", "width", "height",
+        ):
+            value = getattr(self, name)
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"Pending download {name} must be a positive integer.")
+        if not _FLOW_PROJECT_ID_PATTERN.fullmatch(self.candidate_id):
+            raise ValueError("Pending download candidate identity must be a canonical UUID.")
+        if self.project_id is not None and (
+            not isinstance(self.project_id, str)
+            or not _FLOW_PROJECT_ID_PATTERN.fullmatch(self.project_id)
+        ):
+            raise ValueError("Pending download project identity must be a canonical UUID or null.")
+        if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
+            raise ValueError("Pending download SHA-256 must contain 64 lowercase hex digits.")
+        format_mimes = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}
+        if format_mimes.get(self.image_format) != self.mime_type:
+            raise ValueError("Pending download image format and MIME type must be supported and match.")
+        for name in ("browser_suggested_filename", "browser_download_guid"):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"Pending download {name} must be a string or null.")
+
+
 @dataclass
 class CandidateRecord:
     variant: int
@@ -94,10 +161,15 @@ class CandidateRecord:
     image_format: str | None = None
     downloaded_at: str | None = None
     download_error: str | None = None
+    pending_download_commit: PendingDownloadCommit | None = None
 
     def validate(self) -> None:
         if self.download_status not in VALID_DOWNLOAD_STATUSES:
             raise ValueError(f"Invalid candidate download status: {self.download_status}")
+        if self.pending_download_commit is not None:
+            if not isinstance(self.pending_download_commit, PendingDownloadCommit):
+                raise ValueError("Pending download metadata must be a PendingDownloadCommit record.")
+            self.pending_download_commit.validate()
 
 
 @dataclass(frozen=True)

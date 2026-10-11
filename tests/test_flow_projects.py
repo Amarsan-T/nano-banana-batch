@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 from PIL import Image
 
@@ -124,7 +125,7 @@ class ProjectFlowAdapter:
             candidates=tuple(
                 DiscoveredCandidate(
                     source_kind="rendered-image",
-                    candidate_id=f"project-candidate-{item.order}-{variant}",
+                    candidate_id=str(UUID(int=item.order * 100 + variant)),
                 )
                 for variant in range(1, self.candidate_count + 1)
             )
@@ -447,7 +448,7 @@ class FlowProjectRunStateTests(unittest.TestCase):
             self.assertEqual(adapter.events[:3], ["create", "prepare", ("generate", 1)])
             self.assertEqual(state.flow_project, NEW_PROJECT)
             self.assertTrue(state.flow_project_required)
-            self.assertEqual(state.version, 4)
+            self.assertEqual(state.version, 6)  # Pending download persistence migrates the completed run.
             self.assertEqual(len(outcomes), 2)
             self.assertEqual(adapter.prepare_calls, [(NEW_PROJECT, GenerationSettings(variants=1))])
 

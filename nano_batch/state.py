@@ -7,7 +7,10 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from .models import CandidateRecord, FlowProjectReference, RunItemState, RunState
+from .models import (
+    CandidateRecord, FlowProjectReference, PendingDownloadCommit,
+    PENDING_DOWNLOAD_COMMIT_STATE_VERSION, RunItemState, RunState,
+)
 
 
 class StatePersistenceError(RuntimeError):
@@ -47,6 +50,12 @@ class RunStateStore:
                 time.sleep(_ATOMIC_REPLACE_RETRY_DELAYS_SECONDS[attempt])
 
     def save(self, state: RunState) -> None:
+        has_pending_download = False
+        for item in state.items:
+            for candidate in item.candidates:
+                if candidate.pending_download_commit is not None:
+                    candidate.validate()
+                    has_pending_download = True
         if state.flow_project is not None:
             state.flow_project.validate()
         if state.flow_project is not None and not state.flow_project_required:
@@ -73,7 +82,18 @@ class RunStateStore:
                 if state.flow_project != existing_project:
                     raise ValueError("Flow project ownership cannot be replaced or removed.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps(asdict(state), ensure_ascii=False, indent=2, sort_keys=True)
+        document = asdict(state)
+        if has_pending_download:
+            if type(state.version) is not int:
+                raise ValueError("Pending download state version must be an integer.")
+            document["version"] = max(state.version, PENDING_DOWNLOAD_COMMIT_STATE_VERSION)
+        # Omit the new optional field for ordinary/legacy candidates. An active
+        # record and its version migration are installed in the same replacement.
+        for item in document["items"]:
+            for candidate in item["candidates"]:
+                if candidate["pending_download_commit"] is None:
+                    del candidate["pending_download_commit"]
+        payload = json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True)
         fd, tmp_name = tempfile.mkstemp(
             prefix=self.path.name + ".",
             suffix=".tmp",
@@ -87,6 +107,7 @@ class RunStateStore:
                 handle.flush()
                 os.fsync(handle.fileno())
             self._replace_atomically(tmp_name)
+            state.version = document["version"]
         except Exception:
             try:
                 os.unlink(tmp_name)
@@ -107,7 +128,26 @@ class RunStateStore:
         items = []
         for raw_item in raw["items"]:
             item = dict(raw_item)
-            item["candidates"] = [CandidateRecord(**candidate) for candidate in item.get("candidates", [])]
+            candidates = []
+            for raw_candidate in item.get("candidates", []):
+                candidate = dict(raw_candidate)
+                pending = candidate.get("pending_download_commit")
+                if pending is not None:
+                    if (
+                        type(raw["version"]) is not int
+                        or raw["version"] < PENDING_DOWNLOAD_COMMIT_STATE_VERSION
+                    ):
+                        raise ValueError("Pending download records require run-state version 6 or later.")
+                    if not isinstance(pending, dict):
+                        raise ValueError("Pending download metadata must be a JSON object or null.")
+                    try:
+                        record = PendingDownloadCommit(**pending)
+                    except TypeError as exc:
+                        raise ValueError("Pending download record fields are malformed.") from exc
+                    record.validate()
+                    candidate["pending_download_commit"] = record
+                candidates.append(CandidateRecord(**candidate))
+            item["candidates"] = candidates
             items.append(RunItemState(**item))
         state = RunState(
             schema=raw["schema"],
