@@ -318,13 +318,13 @@ class ProductionWindowTests(unittest.TestCase):
         self.assertEqual(dom_probe.call_count, 2)
         page.wait_for_timeout.assert_called_once_with(50)
 
-    def test_result_wait_settle_rearms_only_missing_observer_for_same_attempt(self):
+    def test_result_wait_settle_rearms_existing_inactive_observer_for_same_attempt(self):
         session, page, _cdp = self.session("maximized")
         page.url = PROJECT_URL
         inactive = post_restore_dom(
             prompt_surface_count=0,
             progress_surface_count=1,
-            attempt_observer_present=False,
+            attempt_observer_present=True,
             attempt_observer_active=False,
         )
         active = {
@@ -365,8 +365,8 @@ class ProductionWindowTests(unittest.TestCase):
         self.assertTrue(result["observer_rearmed"])
         self.assertTrue(result["same_generation_attempt_active"])
         self.assertTrue(result["start_acknowledged"])
-        begin.assert_called_once_with()
-        arm.assert_called_once_with()
+        begin.assert_not_called()
+        arm.assert_called_once_with(preserve_attempt=True)
 
     def test_post_restore_settle_timeout_is_safe_and_fail_closed(self):
         session, page, _cdp = self.session("maximized")
@@ -377,6 +377,8 @@ class ProductionWindowTests(unittest.TestCase):
             body_child_count=0,
             generic_control_count=0,
             prompt_surface_count=0,
+            attempt_observer_present=True,
+            attempt_observer_active=True,
         )
         with patch.object(
             session,

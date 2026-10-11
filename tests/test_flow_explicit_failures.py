@@ -113,6 +113,8 @@ class Element {{
   constructor(tag, parent = null) {{
     this.tagName = tag.toUpperCase();
     this.parentElement = parent;
+    this.children = [];
+    if (parent) parent.children.push(this);
     this.isConnected = true;
     this.innerText = '';
     this.textContent = '';
@@ -135,6 +137,7 @@ class MutationObserver {{
   }}
   observe(_target, options) {{ this.options = options; }}
   disconnect() {{}}
+  takeRecords() {{ return []; }}
 }}
 globalThis.Element = Element;
 globalThis.MutationObserver = MutationObserver;
@@ -145,7 +148,14 @@ let now = 100;
 globalThis.performance = {{now: () => ++now}};
 globalThis.window = {{}};
 const body = new Element('body');
-globalThis.document = {{body}};
+globalThis.document = {{body, createTreeWalker(root) {{
+  const nodes = [];
+  const visit = (element) => {{
+    for (const child of element.children) {{ nodes.push(child); visit(child); }}
+  }};
+  visit(root);
+  return {{nextNode: () => nodes.shift() || null}};
+}}}};
 
 const makeDeepCard = () => {{
   const card = new Element('section', body);
@@ -175,9 +185,9 @@ if (mode === 'reused' || mode === 'partial') {{
     ? (highDemandScenario ? 'Flow is experiencing high demand. Please try again later.' : 'Sorry, this image failed to generate.')
     : exact.replace(/\. /g, '.\\n');
   changed.card.textContent = changed.card.innerText;
-  const textNode = {{parentElement: changed.leaf}};
+  const textNode = {{parentElement: changed.card, textContent: changed.card.textContent}};
   const records = Array.from({{length: 737}}, () => ({{
-    type: 'characterData', target: textNode
+    type: 'characterData', target: textNode, oldValue: ''
   }}));
   lastObserver.callback(records);
 }} else if (mode === 'added' || mode === 'added_nested_anchor') {{
@@ -190,7 +200,7 @@ if (mode === 'reused' || mode === 'partial') {{
     helpCenterAnchor.textContent = 'Help Center';
   }}
   lastObserver.callback([{{
-    type: 'childList', target: body, addedNodes: [changed.leaf]
+    type: 'childList', target: body, addedNodes: [changed.card]
   }}]);
 }}
 

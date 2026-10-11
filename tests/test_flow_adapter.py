@@ -711,7 +711,7 @@ class FlowAdapterTests(unittest.TestCase):
         button.click.assert_not_called()
         discover.assert_not_called()
 
-    def test_current_attempt_observer_does_not_enumerate_preexisting_cards(self):
+    def test_current_attempt_observer_defers_bounded_baseline_until_start_boundary(self):
         session = FlowSession(PROJECT_URL, Path("profile"))
         page = MagicMock()
         session.page = page
@@ -722,7 +722,10 @@ class FlowAdapterTests(unittest.TestCase):
         self.assertIn("active: false", script)
         self.assertIn("if (!state.active) return", script)
         self.assertNotIn("document.querySelectorAll", script)
-        self.assertNotIn("WeakMap", script)
+        self.assertIn("failureBaseline: new WeakMap()", script)
+        self.assertIn("count > 10000", script)
+        session._arm_current_generation_attempt_observation()
+        self.assertIn("state.captureFailureBaseline()", page.evaluate.call_args.args[0])
         self.assertNotIn("structure", script)
         self.assertNotIn("sha256", script.casefold())
 

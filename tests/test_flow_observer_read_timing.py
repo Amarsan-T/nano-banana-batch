@@ -37,7 +37,10 @@ const cost = (name) => {
   }
 };
 class Element {
-  constructor(parent = null) { this.parentElement = parent; this.text = ''; }
+  constructor(parent = null) {
+    this.parentElement = parent; this.text = ''; this.children = [];
+    if (parent) parent.children.push(this);
+  }
   get isConnected() { cost('container_connectivity'); return true; }
   get innerText() {
     cost('inner_text_read');
@@ -54,13 +57,21 @@ class MutationObserver {
   constructor(callback) { this.callback = callback; }
   observe() {}
   disconnect() {}
+  takeRecords() { return []; }
 }
 globalThis.Element = Element;
 globalThis.MutationObserver = MutationObserver;
 globalThis.getComputedStyle = () => { cost('style_read'); return {visibility: 'visible', display: 'block'}; };
 globalThis.performance = {now: () => { clockReads++; return now; }};
 globalThis.window = {};
-globalThis.document = {body: new Element()};
+globalThis.document = {body: new Element(), createTreeWalker(root) {
+  const nodes = [];
+  const visit = element => {
+    for (const child of element.children) { nodes.push(child); visit(child); }
+  };
+  visit(root);
+  return {nextNode: () => nodes.shift() || null};
+}};
 const exec = (script, ...args) => (0, eval)('(' + script + ')')(...args);
 exec(begin, true);
 const state = window.__nanoBatchCurrentGenerationAttempt;
@@ -74,7 +85,7 @@ if (!options.historical) {
     card.text = options.partial ? 'This generation might violate our policies.' : exact;
     // Pre-mounted and newly mounted cards both use the existing post-Start gate.
     state.observer.callback([options.reused
-      ? {type: 'characterData', target: {parentElement: card}}
+      ? {type: 'characterData', target: {parentElement: card, textContent: card.text}, oldValue: ''}
       : {type: 'childList', target: document.body, addedNodes: [card]}]);
   }
 }

@@ -65,11 +65,13 @@ class MutationObserver {{
   constructor(callback) {{this.callback=callback;}}
   observe() {{observers.add(this);}}
   disconnect() {{observers.delete(this);}}
+  takeRecords() {{return [];}}
 }}
 globalThis.Element=Element;
 globalThis.MutationObserver=MutationObserver;
 globalThis.window={{}};
-globalThis.document={{body:new Element()}};
+globalThis.document={{body:new Element(),
+  createTreeWalker:()=>({{nextNode:()=>null}})}};
 globalThis.getComputedStyle=()=>({{display:'block',visibility:'visible'}});
 let now=1000; globalThis.performance={{now:()=>++now}};
 const exec=(key,...args)=>(0,eval)('('+scripts[key]+')')(...args);

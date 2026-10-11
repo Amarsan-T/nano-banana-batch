@@ -63,6 +63,18 @@ class FlowAutomationError(RuntimeError):
     """Raised when the visible Flow UI cannot be handled confidently."""
 
 
+class FlowFailureAttributionAmbiguous(FlowAutomationError):
+    """Terminal attribution uncertainty, not a confirmed generation failure."""
+
+    def __init__(self, detail: str = (
+        "visible failure evidence could not be distinguished from historical content."
+    )) -> None:
+        super().__init__(
+            f"FLOW_FAILURE_ATTRIBUTION_AMBIGUOUS: {detail} Generation ownership "
+            "is unresolved; explicit manual Retry is required."
+        )
+
+
 class FlowProfileLockedError(FlowAutomationError):
     """Raised when another Chrome process owns the dedicated profile."""
 
@@ -4364,6 +4376,9 @@ class FlowSession:
                 exact_candidate_match_count: exactCandidateMatches,
                 attempt_observer_present: Boolean(attempt?.observer),
                 attempt_observer_active: Boolean(attempt?.observer && attempt?.active),
+                attempt_observer_provenance_lost: Boolean(attempt?.observer &&
+                  (typeof attempt.hasFailureProvenance !== 'function' ||
+                   !attempt.hasFailureProvenance())),
               };
             }
             """,
@@ -4397,6 +4412,7 @@ class FlowSession:
             ),
             "attempt_observer_present": bool(source.get("attempt_observer_present")),
             "attempt_observer_active": bool(source.get("attempt_observer_active")),
+            "attempt_observer_provenance_lost": bool(source.get("attempt_observer_provenance_lost")),
         }
 
     def _rearm_generation_observer_after_window_recovery(
@@ -4404,11 +4420,17 @@ class FlowSession:
         snapshot: dict[str, Any],
     ) -> bool:
         """Restore only post-Start observation state; never submit or reset ownership."""
+        if snapshot.get("attempt_observer_provenance_lost"):
+            raise FlowFailureAttributionAmbiguous(
+                "the submitted attempt's original failure baseline or provenance was lost."
+            )
         if snapshot.get("attempt_observer_active"):
             return False
         if not snapshot.get("attempt_observer_present"):
-            self._begin_current_generation_attempt_observation()
-        self._arm_current_generation_attempt_observation()
+            raise FlowFailureAttributionAmbiguous(
+                "the submitted attempt's failure observer and provenance were lost."
+            )
+        self._arm_current_generation_attempt_observation(preserve_attempt=True)
         return True
 
     def _wait_for_post_window_recovery_settle(
@@ -4458,6 +4480,13 @@ class FlowSession:
                     candidate_id=candidate_id
                 )
                 last_dom = dom
+                if same_generation_attempt_active and (
+                    not dom["attempt_observer_present"]
+                    or dom.get("attempt_observer_provenance_lost")
+                ):
+                    raise FlowFailureAttributionAmbiguous(
+                        "the submitted attempt's failure observer and provenance were lost."
+                    )
                 current_project = _canonical_flow_project_reference(
                     page.url if isinstance(getattr(page, "url", None), str) else None
                 )
@@ -4526,6 +4555,9 @@ class FlowSession:
                         "dom": last_dom,
                     }
                 last_error = None
+            except FlowFailureAttributionAmbiguous:
+                cancellation_checkpoint("window_recovery_settle")
+                raise
             except Exception as exc:
                 last_error = _safe_trace_header(str(exc))
 
@@ -4671,13 +4703,16 @@ class FlowSession:
                 )
                 event["failure_stage"] = "post_restore_settle"
             event["failure_detail"] = _safe_trace_header(str(exc))
-            try:
-                event["after"] = self._safe_production_window_evidence(
-                    self._production_window_snapshot()
-                )
-            except Exception:
-                pass
+            if not isinstance(exc, FlowFailureAttributionAmbiguous):
+                try:
+                    event["after"] = self._safe_production_window_evidence(
+                        self._production_window_snapshot()
+                    )
+                except Exception:
+                    pass
             self._record_window_recovery_event(event)
+            if isinstance(exc, FlowFailureAttributionAmbiguous):
+                raise
             raise FlowAutomationError(
                 "PRODUCTION_WINDOW_NORMALIZATION_FAILED: the dedicated Flow Chrome "
                 "could not be put into a usable maximized desktop layout. Close and "
@@ -8434,7 +8469,7 @@ class FlowSession:
         }
 
     def _begin_current_generation_attempt_observation(self) -> None:
-        """Observe only failure DOM mutations that occur after this point."""
+        """Locate local messages; qualify their failure evidence at the Start boundary."""
         page = self._require_page()
         self._current_generation_failure_poll_observation = None
         page.evaluate(
@@ -8472,10 +8507,12 @@ class FlowSession:
                   element.textContent,
                 ];
                 const unique = [];
-                for (const value of values) {
+                for (const [index, value] of values.entries()) {
                   const text = readTiming ? readStep('normalization', () =>
                     String(value || '').replace(/\s+/g, ' ').trim()) :
                     String(value || '').replace(/\s+/g, ' ').trim();
+                  // A label is its own message channel, never descendant text.
+                  if (index === 0) unique.ariaLabel = text.length <= 1200 ? text : '';
                   if (text && text.length <= 1200 && !unique.includes(text)) {
                     unique.push(text);
                   }
@@ -8516,6 +8553,10 @@ class FlowSession:
                 progressRegionCount: 0, progressTruncated: false,
                 failureContainers: [], failureContainerNodes: new WeakSet(),
                 failureContainerLimit: 200, failureContainerTruncated: false,
+                failureBaseline: new WeakMap(), historicalFailureEvidence: new Set(),
+                failureBaselineTruncated: false, failureAttributionAmbiguous: false,
+                failureMutationSources: new WeakMap(), progressOwners: new WeakSet(),
+                clearedFailureSurfaces: new WeakSet(),
                 postStartFailureMutationCount: 0,
                 visibleFailureContainerCount: 0,
                 currentAttemptFailureContainerCount: 0,
@@ -8617,6 +8658,58 @@ class FlowSession:
                 // without requiring any fresh browser RPC during intentional unwind.
                 expiry = setTimeout(() => { expired = true; stop(); }, 30000);
               }
+              // Compare failure clauses, not aggregate DOM text: progress, formatting,
+              // or a new sibling must never make inherited failure content look new.
+              const evidencePattern = /sorry,\s+this image failed to generate|we noticed some unusual activity|please visit the help center for more information|this generation might violate our policies|please try a different prompt or send feedback|flow is experiencing high demand\.\s+please try again later\.|you have not been charged for this generation|generation failed|could not generate|couldn't generate|failed to generate|error generating|you\s*(?:['’]\s*ve|have)\s+reached\s+your\s+usage\s+limit|\bfailed\b/gi;
+              const evidence = (texts) => [...new Set(texts.flatMap((text) =>
+                (text.match(evidencePattern) || []).map((clause) =>
+                  clause.toLowerCase().replace(/\s+/g, ' ').trim())
+              ))].sort().join('|');
+              const complete = (texts) => texts.some((text) =>
+                unusualActivityPattern.test(text) || policyViolationPattern.test(text) ||
+                genericGenerationFailurePattern.test(text) || highDemandPattern.test(text) ||
+                (failurePattern.test(text) && !genericGenerationFailureClause.test(text)));
+              const boundarySelector =
+                'flow-image-tile,article,[data-media-id],[role="alert"],[role="status"],[aria-live]';
+              const localOwner = (element) => {
+                for (let current = element, depth = 0;
+                     current && current !== document.body && depth < 12;
+                     current = current.parentElement, depth++) {
+                  if (current.matches(boundarySelector)) return current;
+                }
+                return null;
+              };
+              const localSurface = (element, texts) => {
+                if (complete([texts.ariaLabel || ''])) return true;
+                // The smallest complete message subtree is an independent surface.
+                // Never assemble clauses across separate card/message boundaries or
+                // retain a shared history ancestor of an already complete message.
+                if ([...(element.children || [])].some((child) =>
+                    complete(normalizedTexts(child)))) return false;
+                return element.querySelectorAll(boundarySelector).length === 0;
+              };
+              state.hasFailureProvenance = () => Boolean(state.observer &&
+                Number.isFinite(state.activatedAtMs) &&
+                state.failureBaseline instanceof WeakMap &&
+                state.historicalFailureEvidence instanceof Set &&
+                state.failureMutationSources instanceof WeakMap &&
+                state.progressOwners instanceof WeakSet &&
+                state.clearedFailureSurfaces instanceof WeakSet);
+              state.captureFailureBaseline = () => {
+                state.failureBaseline = new WeakMap();
+                state.historicalFailureEvidence = new Set();
+                state.failureBaselineTruncated = false;
+                const walker = document.createTreeWalker(document.body, 1);
+                let element, count = 0;
+                while ((element = walker.nextNode())) {
+                  if (++count > 10000) { state.failureBaselineTruncated = true; break; }
+                  const texts = normalizedTexts(element);
+                  const signature = evidence(complete([texts.ariaLabel || ''])
+                    ? [texts.ariaLabel] : texts);
+                  state.failureBaseline.set(element, signature);
+                  if (signature) state.historicalFailureEvidence.add(signature);
+                }
+              };
               state.noteProgress = (element) => {
                 if (!state.active || !element?.isConnected || !visible(element) ||
                     state.progressNodes.has(element)) return;
@@ -8626,29 +8719,58 @@ class FlowSession:
                 }
                 state.progressNodes.add(element);
                 state.progressRegionCount++;
+                // Only a separate, failure-free semantic owner proves a current
+                // progress -> failure transition. History-level progress cannot.
+                for (let owner = element, depth = 0;
+                     owner && owner !== document.body && depth < 12;
+                     owner = owner.parentElement, depth++) {
+                  if (owner.matches(boundarySelector) &&
+                      !state.failureBaseline.get(owner) &&
+                      !evidence(normalizedTexts(owner))) {
+                    // A status indicator and its enclosing card may both be
+                    // replaced. Do not promote their common history container.
+                    const boundaries = [...owner.querySelectorAll(boundarySelector)];
+                    if (boundaries.every((child) => child === element || child.contains(element))) {
+                      state.progressOwners.add(owner);
+                    }
+                  }
+                }
                 for (let ancestor = element, depth = 0;
                      ancestor && ancestor !== document.body && depth < 8;
                      ancestor = ancestor.parentElement, depth++) {
                   state.progressAncestors.add(ancestor);
                 }
               };
-              state.trackFailureContainers = (element) => {
+              state.trackFailureContainers = (element, contentChanged = false) => {
                 if (!state.active || !(element instanceof Element)) return;
+                const sourceEvidence = contentChanged && evidence(normalizedTexts(element));
                 for (let current = element, depth = 0;
                      current && current !== document.body && depth < 12;
                      current = current.parentElement, depth++) {
-                  if (!current.isConnected || state.failureContainerNodes.has(current)) {
-                    continue;
+                  if (!current.isConnected) continue;
+                  if (current.matches('[role="progressbar"],[role="status"],[aria-busy="true"]')) {
+                    state.noteProgress(current);
                   }
                   const semanticContainer = current.matches(
                     '[role="alert"],[role="status"],[aria-live]'
                   );
-                  const hintedContainer = normalizedTexts(current).some(
+                  const texts = normalizedTexts(current);
+                  if (contentChanged && current === element && !evidence(texts) &&
+                      state.failureBaseline.get(current) && localSurface(current, texts)) {
+                    // Reuse of this exact message node after a local content reset
+                    // can produce the same failure wording in a later attempt.
+                    state.clearedFailureSurfaces.add(current);
+                  }
+                  const hintedContainer = texts.some(
                     (text) => failureContainerHintPattern.test(text)
                   );
                   if (!semanticContainer && !hintedContainer) continue;
+                  if (!localSurface(current, texts)) continue;
+                  if (sourceEvidence) state.failureMutationSources.set(current, element);
+                  if (state.failureContainerNodes.has(current)) continue;
                   if (state.failureContainers.length >= state.failureContainerLimit) {
                     state.failureContainerTruncated = true;
+                    if (complete(texts) && sourceEvidence) state.failureAttributionAmbiguous = true;
                     break;
                   }
                   state.failureContainerNodes.add(current);
@@ -8659,7 +8781,30 @@ class FlowSession:
                 if (!(element instanceof Element) || !element.isConnected || !visible(element)) {
                   return false;
                 }
-                const texts = normalizedTexts(element);
+                const channels = normalizedTexts(element);
+                const texts = complete([channels.ariaLabel || ''])
+                  ? [channels.ariaLabel] : channels;
+                if (!complete(texts) || !localSurface(element, channels) ||
+                    !state.failureMutationSources.has(element)) return false;
+                const signature = evidence(texts);
+                const baseline = state.failureBaseline.get(element);
+                const owner = localOwner(element);
+                const transitioned = state.clearedFailureSurfaces.has(element) ||
+                  (owner && state.progressOwners.has(owner));
+                if (baseline === signature && !transitioned) return false;
+                const source = state.failureMutationSources.get(element);
+                const inheritedPartial = baseline && source !== element;
+                if (!transitioned && (inheritedPartial ||
+                    (baseline === undefined && (state.failureBaselineTruncated ||
+                     state.historicalFailureEvidence.has(signature))))) {
+                  // A remounted historical message and a new identical failure
+                  // cannot be distinguished by fresh node identity alone. Nor can
+                  // an ancestor combine old partial clauses with a new sibling's
+                  // text and establish ownership by its tag/role alone.
+                  state.failureAttributionAmbiguous = true;
+                  state.lastFailureDetectionReason = 'failure_attribution_ambiguous';
+                  return false;
+                }
                 if (readStep('signature_match', () => texts.some((text) => unusualActivityPattern.test(text)))) {
                   return readStep('failure_record', () => {
                     const isNew = !state.failures.includes(unusualActivityFailure);
@@ -8720,14 +8865,9 @@ class FlowSession:
                   return true;
                 });
               };
-              const remember = (element) => {
+              const remember = (element, contentChanged = false) => {
                 if (!(element instanceof Element) || !element.isConnected) return;
-                state.trackFailureContainers(element);
-                for (let current = element, depth = 0;
-                     current && current !== document.body && depth < 6;
-                     current = current.parentElement, depth++) {
-                  state.detectFailureIn(current);
-                }
+                state.trackFailureContainers(element, contentChanged);
               };
               state.scanFailureContainers = () => {
                 if (!state.active) {
@@ -8752,6 +8892,10 @@ class FlowSession:
                 }
                 state.currentAttemptFailureContainerCount = currentCount;
                 state.visibleFailureContainerCount = visibleCount;
+                if (state.failureAttributionAmbiguous) {
+                  state.lastFailureDetectionReason = 'failure_attribution_ambiguous';
+                  return;
+                }
                 if (state.failures.length !== priorFailureCount) return;
                 if (currentCount === 0) {
                   state.lastFailureDetectionReason =
@@ -8782,11 +8926,11 @@ class FlowSession:
                 )) {
                   state.noteProgress(progress);
                 }
-                remember(element);
+                remember(element, true);
                 for (const candidate of element.querySelectorAll(
                   '[role="alert"],[role="status"],[aria-live],p,span,div'
                 )) {
-                  remember(candidate);
+                  remember(candidate, true);
                 }
               };
               state.observer = new MutationObserver((records) => {
@@ -8805,9 +8949,14 @@ class FlowSession:
                     remember(record.target);
                     for (const node of record.addedNodes) inspectAddedSubtree(node);
                   } else if (record.type === 'characterData') {
-                    remember(record.target.parentElement);
+                    const changed = evidence([record.target.textContent || '']) !==
+                      evidence([record.oldValue || '']);
+                    remember(record.target.parentElement, changed);
                   } else if (record.type === 'attributes') {
-                    remember(record.target);
+                    const changed = record.attributeName === 'aria-label' &&
+                      evidence([record.target.getAttribute('aria-label') || '']) !==
+                      evidence([record.oldValue || '']);
+                    remember(record.target, changed);
                   }
                 }
                 if (callbackStarted !== null) {
@@ -8821,7 +8970,9 @@ class FlowSession:
                 childList: true,
                 subtree: true,
                 characterData: true,
+                characterDataOldValue: true,
                 attributes: true,
+                attributeOldValue: true,
                 attributeFilter: [
                   'aria-label', 'aria-live', 'aria-hidden', 'role', 'hidden', 'class', 'style'
                 ],
@@ -8857,15 +9008,28 @@ class FlowSession:
             self.prestart_timing_debug,
         )
 
-    def _arm_current_generation_attempt_observation(self) -> None:
+    def _arm_current_generation_attempt_observation(
+        self, *, preserve_attempt: bool = False,
+    ) -> None:
         """Accept new failure mutations immediately before Start activation."""
         page = self._require_page()
-        page.evaluate(
+        armed = page.evaluate(
             r"""
-            () => {
+            (preserveAttempt = false) => {
               const state = window.__nanoBatchCurrentGenerationAttempt;
+              // Recovery cannot create a Start boundary after submission or use
+              // a replacement observer that lacks the original attempt evidence.
+              if (preserveAttempt && (typeof state?.hasFailureProvenance !== 'function' ||
+                  !state.hasFailureProvenance())) return false;
               if (!state?.observer) {
                 throw new Error('Current generation observer is not installed.');
+              }
+              // Window recovery re-arms the same acknowledged attempt. Preserve
+              // its original baseline and provenance rather than snapshotting the
+              // post-Start DOM as history or granting it a fresh Start boundary.
+              if (state.activatedAtMs !== null) {
+                state.active = true;
+                return true;
               }
               state.failures = [];
               state.activatedAtMs = performance.now();
@@ -8890,11 +9054,23 @@ class FlowSession:
               state.currentAttemptFailureContainerCount = 0;
               state.unusualSignatureMatchCount = 0;
               state.genericSignatureMatchCount = 0;
+              state.failureAttributionAmbiguous = false;
+              state.failureMutationSources = new WeakMap();
+              state.progressOwners = new WeakSet();
+              state.clearedFailureSurfaces = new WeakSet();
+              state.observer.takeRecords();
+              state.captureFailureBaseline();
               state.lastFailureDetectionReason = 'awaiting_post_start_mutation';
               state.active = true;
+              return true;
             }
-            """
+            """,
+            preserve_attempt,
         )
+        if preserve_attempt and armed is not True:
+            raise FlowFailureAttributionAmbiguous(
+                "the submitted attempt's original failure baseline or provenance was lost."
+            )
 
     @_ack_profiled("observer_read")
     def _current_generation_attempt_failures(self) -> tuple[str, ...]:
@@ -8944,6 +9120,13 @@ class FlowSession:
               } : null;
               const state = timing ? timing.run('state_lookup', () => window.__nanoBatchCurrentGenerationAttempt)
                 : window.__nanoBatchCurrentGenerationAttempt;
+              if (typeof state?.hasFailureProvenance !== 'function' ||
+                  !state.hasFailureProvenance()) {
+                return {failures: [], failure_attribution_ambiguous: true, diagnostics: {
+                  failure_observer_active: Boolean(state?.active),
+                  last_failure_detection_reason: 'attempt_provenance_lost',
+                }};
+              }
               if (timing) state?.setObserverReadTiming?.(timing);
               let payload;
               try {
@@ -8951,6 +9134,7 @@ class FlowSession:
                 else state?.scanFailureContainers?.();
                 const buildPayload = () => state ? {
                   failures: [...state.failures],
+                  failure_attribution_ambiguous: Boolean(state.failureAttributionAmbiguous),
                   diagnostics: {
                     failure_observer_active: Boolean(state.active),
                     generation_dom_mutation_count: state.mutationCount ?? 0,
@@ -9046,6 +9230,8 @@ class FlowSession:
             ),
             "exact_explicit_failure_detected": bool(items),
         }
+        if isinstance(raw, dict) and raw.get("failure_attribution_ambiguous") is True:
+            raise FlowFailureAttributionAmbiguous()
         return tuple(
             dict.fromkeys(
                 _safe_current_generation_failure(str(item))

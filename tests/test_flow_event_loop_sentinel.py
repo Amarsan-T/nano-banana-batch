@@ -43,6 +43,7 @@ const [begin, arm, read, stop, options] = INPUT;
     constructor(callback) { this.callback = callback; }
     observe() {}
     disconnect() {}
+    takeRecords() { return []; }
   }
   class PerformanceObserver {
     static supportedEntryTypes = options.supported ? ['longtask'] : [];
@@ -57,6 +58,7 @@ const [begin, arm, read, stop, options] = INPUT;
   globalThis.PerformanceObserver = PerformanceObserver;
   globalThis.performance = {now: () => now};
   globalThis.document = {body: new Element(),
+    createTreeWalker() { return {nextNode: () => null}; },
     addEventListener(type, handler, settings) {
       if (!settings.capture || !settings.passive) throw new Error('nonpassive listener');
       if (!listeners.has(type)) listeners.set(type, new Set());
