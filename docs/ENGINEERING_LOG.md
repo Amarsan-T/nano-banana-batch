@@ -652,3 +652,203 @@ Only the public checkout and disposable synthetic fixtures were used. The origin
 project, private runtime data, credentials, profiles, and live browser sessions
 were neither accessed nor modified. Nothing was staged, committed, pushed,
 published, or connected to a remote. Work stops for explicit commit approval.
+
+## Stage 3 — approved pre-publication corrections (2026-10-11)
+
+### Audit evidence and the developer's decision
+
+Codex's read-only audit of `80a772c` inspected all three committed trees and
+identified no P0 secret exposure. It established that the declared Playwright
+minimum was incompatible with the used CDP keywords, and identified misleading
+setup, model, retry, atomicity, cleanup, and acceptance descriptions. An in-memory
+control-flow probe also established that ordinary downloads omitted the global
+file-claim guard: completion could be saved while another candidate retained a
+claim to the same canonical path. Pending recovery rejected the identical claim.
+
+The independent developer reviewed the audit and accepted READY AFTER FIXES. The
+developer explicitly prioritized ordinary-download ownership, required a failing
+offline regression before production changes, approved the Playwright 1.60 floor,
+and directed precise documentation corrections and conservative boundaries. The
+developer kept licensing, public Git identity, and the redirected-assets-root
+correction separate and prohibited commits/publication in this checkpoint.
+
+Codex wrote the Stage 3 regressions, implemented the narrow download guards, and
+updated dependency/documentation text under that direction. No new hands-on Python
+implementation by the developer is claimed for this checkpoint. The Stage 2.2
+record of the developer's initial validator code, reasoning, collaborative design,
+and subsequent Codex-assisted completion remains unchanged. The body of the
+developer-originated contextual validator is unchanged by Stage 3.
+
+### Regression-first reproduction and correction
+
+Before editing production logic, the real synthetic-file execution regression
+failed: `ValueError` was not raised and the normal download installed/completed a
+file claimed by another candidate's stale paths. The first 14-test suite produced
+15 assertion failures (including subtests), zero errors, and zero skips against
+the original code. Two nonconflicting behavior tests passed. The corrected
+14-test suite then passed. The same regression assertions were retained.
+
+The expanded tests cover candidate local/relative claims, Order outputs, competing
+pending records, alternate canonical extensions, malformed/escaping/contradictory
+paths, actual staging collisions, late claims before receipt/installation/completion,
+and valid independent completed assets. Further adversarial inspection added
+next-candidate, Order-finalization, and failure-status persistence checks, plus
+partial x2 Resume, repeated skips, explicit overwrite, and duplicate registrations.
+
+The shared global file-claim helper now serves ordinary planning as well as pending
+recovery. Planning checks the deterministic canonical stem before any download
+status write. Once staging is allocated, its actual path is checked before browser
+download. Ordinary skip/explicit overwrite may retain exactly one own-Order output
+registration only when the selected candidate's recorded paths agree with that
+canonical file; other candidates, Orders, extensions, or duplicate registrations
+cannot use that exception. Recovery retains its stricter default and permits no
+completed output registration of pending files.
+
+Bounded saved-state rereads precede attempt/candidate status writes, browser
+download, pending-receipt persistence, canonical installation, candidate completion,
+failure persistence, and final Order completion. A changed snapshot is rejected
+under the existing single-writer contract rather than merged or overwritten.
+Private ownership errors leave changed durable evidence untouched; an existing
+pending receipt is preserved for fail-closed recovery. Cancellation checkpoints
+surround the added local checks. These checks do not constitute locking or
+compare-and-swap persistence and cannot eliminate a mutation after the final check.
+
+Adversarial review also reproduced a cleanup consequence of the new rejection
+path: normal temporary-directory cleanup deleted staging newly claimed by a
+competing pending record. Its real-file regression failed before the cleanup
+correction. An ownership-rejection exception now retains the staging directory
+and detaches its GC cleanup finalizer, so disputed bytes survive even when the selected
+candidate has not yet persisted its own receipt. This remains a stop, not adoption
+or automatic retry; the separate redirected-assets-root issue is unchanged.
+
+The pending record still precedes installation, and candidate completion/removal
+of its pending record still share one atomic JSON replacement. No generation,
+retry-budget, Flow adapter, state-schema, or file-installation algorithm was changed.
+
+### Compatibility and documentation
+
+`requirements.txt` now declares `playwright>=1.60,<2`. Both existing attachment
+calls pass `is_local=True` and `no_defaults=True`; official API/tagged-source review
+established introduction in 1.58 and 1.60 respectively. Playwright was not installed
+or upgraded in this checkpoint. Offline browser behavior uses doubles; it is not
+live compatibility evidence.
+
+README setup now names the documented Windows/Python 3.12 target and the actual
+offline Python/Pillow/Node versions, creates `.venv` before installing dependencies,
+explains optional activation and `run.bat`, and identifies Node as an observer-test
+prerequisite. Browser-free examples no longer imply completed generation state is
+distributed. Model names/hints, bounded failure-specific retries, usage-limit
+waiting, ambiguity, decoding/revalidation, cancellation cleanup, atomic JSON versus
+non-atomic fallback, and historical versus current acceptance are distinguished.
+Trusted local CDP, private screenshots, single-writer/race/staging limitations,
+baseline-scan latency, and the separate redirected-assets-root issue are disclosed.
+The independent/unofficial status is explicit, without claiming legal compliance.
+
+### Remaining boundary
+
+The older ordinary assets-root helper is unchanged; staging can begin in a resolved
+redirected directory before pending-path rejection. Trusted, unredirected run
+directories remain required. Non-atomic fallback partial files, staging leftovers,
+physical-writer uncertainty, filesystem races, and real Windows alias/live Flow
+acceptance remain limitations. No production performance optimization was added.
+License and public identity decisions remain with the developer; no LICENSE file,
+Git identity change, history rewrite, remote, or release was created.
+
+### Final validation and review checkpoint
+
+- Focused ordinary-download ownership suite: 21 passed in 4.345 seconds. The
+  original failing execution/planning assertions and the subsequently failing
+  disputed-staging cleanup assertion pass without being removed or weakened.
+- Earlier combined download/recovery/state/runner checks: 188 passed. The final
+  complete offline suite on the completed production changes: 1,070 passed in
+  219.917 seconds, zero failures, errors, or skips. Existing Flow, launcher, CLI,
+  cancellation, Resume, Node observer, and state-codec regressions are included.
+- The default sandbox temporary directory produced Windows access-denied errors
+  during an initial broader run. Reruns used ignored public-checkout scratch space;
+  no test was skipped or changed to hide those environmental errors. Intermediate
+  full-suite runs were restarted after further production safeguards so the final
+  result covers the completed implementation.
+- `compileall app.py nano_batch tests`: passed. Tracked `git diff --check` and
+  separate whitespace/UTF-8 checks including the new untracked test file passed.
+- Four publication security checks passed: eligible content, synthetic UUIDs,
+  sensitive-runtime ignore rules, and public-file inclusion. The current eligible
+  inventory contains no new private or sensitive files.
+- Fresh synthetic CLI inspection, dry-run, generation preview, batch preview,
+  and prompt preview succeeded without creating a run directory/state. Candidate
+  download preview without persisted generation state correctly failed with no
+  writes. These were not browser/Flow acceptance checks.
+- Static comparison confirms both existing CDP calls match the documented 1.60
+  floor, the contextual validator body is unchanged, and prior engineering-log
+  content is preserved verbatim. No package was installed/upgraded. The audit
+  runtime used Python 3.12.14, Pillow 12.3.0, and Node.js 24.20.0; Playwright was
+  absent and browser/CDP interactions in tests were mocked.
+
+Final adversarial review covered own versus competing output registrations,
+alternate extensions, changed snapshots before writes, failed-download saves,
+candidate-to-candidate transitions, Order finalization, and retention of disputed
+staging. No further in-scope P0/P1 implementation blocker was identified. Licensing
+and public identity decisions are still pending with the developer. Live Flow,
+fresh dependency installation, real Windows junction creation, and the documented
+filesystem/latency limitations remain outside this verification.
+
+The final inventory is README, requirements, runner, this appended log, and the
+new ordinary-download ownership test file. Branch remains `main` at `80a772c`;
+the index is unchanged and no remote is configured. Only the public checkout and
+synthetic offline fixtures were used; the original project, private runtime data,
+real profiles, browser/CDP sessions, and live Flow were not accessed. Nothing was
+staged, committed, pushed, published, or rewritten. Work stops for the developer's
+final pre-publication diff review and subsequent Git decision.
+
+## Stage 3 — owner-selected MIT licensing update (2026-10-11)
+
+The developer subsequently selected the MIT License and explicitly approved a
+root LICENSE containing the complete standard text and the notice
+`Copyright (c) 2026 Amarsan Tsyrendorzhiev`. This supersedes the pending licensing
+instruction recorded at the earlier checkpoint above; that earlier historical
+record is retained. Public Git identity presentation remains a separate decision.
+
+Codex added LICENSE, checked its permission/notice/disclaimer body against the
+standard MIT text, and updated README's current status and license link. The prior
+ordinary-download correction, tests, dependency floor, validator implementation,
+and engineering attribution were preserved. No Git authorship setting or history
+was changed, and no production code was changed for this licensing update.
+
+The eligible public files were checked for binary/vendor assets, symlinks,
+copyright/license banners, copied/adapted-source markers, and attribution URLs.
+No identifiable vendored implementation, third-party images/fonts/logos, or
+copied-source attribution notice was found. Third-party service names, selectors,
+and exact Flow UI message text are used for compatibility/detection; the project
+license does not establish rights to Google's service or trademarks.
+
+The separately installed dependencies retain their upstream terms: Playwright's
+1.60 license is Apache 2.0, and Pillow 12.3.0 is MIT-CMU, confirmed against upstream
+license files and Pillow's local metadata. They are not relicensed by this LICENSE.
+No dependency was installed or upgraded. Their own notices must remain applicable
+if a later release bundles third-party software; this source-only checkpoint does
+not prepare such a bundle.
+
+No affirmative third-party licensing conflict was identified. The repository
+begins with a sanitized snapshot, so these checks cannot prove the provenance or
+licensing rights of every earlier line or exclude unmarked copied code. Earlier
+code authorship remains uncertain where the record does not establish it; the new
+copyright notice is the developer's explicit licensing decision, not a fabricated
+claim of exclusive historical line-by-line authorship. Trademark/Flow terms
+compliance and ownership of future generated assets were not established here.
+
+Licensing-update verification: 21 focused ownership tests passed (5.773 seconds);
+the complete offline suite passed 1,070 tests (242.286 seconds), with zero failures,
+errors, or skips. Four publication security checks, Python compilation, whitespace
+checks including untracked files, standard MIT body/copyright comparison, README
+license links, the dependency-floor check, and validator-preservation checks passed.
+The public eligible inventory contains 60 UTF-8 files and no binaries or symlinks.
+The intended author copyright notice is public information expressly supplied by
+the developer; no private credentials or runtime material were added.
+
+The cumulative Stage 3 inventory is four tracked modifications (README,
+engineering log, runner, requirements) and two untracked additions (LICENSE and
+the ordinary-download ownership test file). The licensing update itself changes
+only LICENSE, README, and this appended log. All earlier engineering-log text and
+the developer's validator code are preserved. Branch remains `main` at `80a772c`,
+the index is unchanged, no remote is configured, and nothing was committed,
+rewritten, pushed, or published. Original/private projects, real profiles,
+Chrome/CDP sessions, and live Flow were not accessed. Work stops for review.

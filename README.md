@@ -2,6 +2,10 @@
 
 A deliberately small standalone experiment for obtaining organized image candidates from Google Flow / Nano Banana.
 
+Nano Banana Batch is an independent, unofficial project and is not affiliated with
+Google. This repository does not establish trademark authorization or compliance
+with Google Flow's terms. The project is licensed under the [MIT License](LICENSE).
+
 It accepts the same basic `batch.json` shape exported by YouTube Factory, preserves each `visual_id`, and is intentionally separated from the editing pipeline.
 
 ## Public repository and private local data
@@ -35,10 +39,10 @@ are a focused safeguard, not a guarantee that every possible secret is detected.
 - Attaches Playwright to that exact existing Chrome instance and exact configured Flow project tab.
 - Reports sanitized, visible Flow DOM metadata without submitting a prompt.
 - Reports a read-only `mode_detection` classification with explicit or inferred DOM evidence.
-- Previews one selected item with zero browser, state, generation, or credit interaction.
+- Previews one selected item without browser actions, state writes, generation, or credit use; existing state may be read.
 - Runs one explicitly requested prompt through a conservative Flow adapter.
 - Persists `pending → running → completed/failed`, attempt counts, candidate signals, and deterministic suggested filenames.
-- Requires `--retry` for failed or interrupted work and protects completed items from overwrite.
+- Protects submitted/ambiguous failed generations with explicit Retry, with only the bounded failure-specific automatic recoveries described below.
 - Previews or downloads candidates for one already-completed item without regenerating it.
 - Uses each persisted Flow candidate UUID to select exactly one image tile, its first-level Download submenu parent, and the exact enabled `1K Original size` action.
 - Validates PNG/JPEG/WebP files with Pillow and persists hashes, dimensions, MIME, format, paths, timestamps, and independent download status.
@@ -50,22 +54,69 @@ are a focused safeguard, not a guarantee that every possible secret is detected.
 
 ## Deliberate limits
 
-The underlying real paths each handle exactly one prompt or one order's persisted candidates. `run-batch` composes those primitives sequentially for every item in any validated non-empty batch. The accepted external-batch Flow configuration remains two candidates per order; `run-prompt` and `run-prompts-file` request one candidate per prompt. There is no automatic login, CAPTCHA/security bypass, candidate judging, web search, concurrency, multi-account support, hardcoded 51-item special case, or video generation.
+The underlying real paths each handle exactly one prompt or one order's persisted candidates. `run-batch` composes those primitives sequentially for every item in any validated non-empty batch. External batches support x1/x2; the historical 51-order acceptance used x2. `run-prompt` and `run-prompts-file` request x1. There is no automatic login, CAPTCHA/security bypass, candidate judging, web search, concurrency, multi-account support, hardcoded 51-item special case, or video generation.
 
-The adapter uses accessible roles, labels, visible control text, rendered image elements, download controls, progress semantics, and terminal error messages. Image mode is accepted either from one explicitly selected Image control or, when that control is absent, from all of these positive current-page signals together: one configured-hint-matching Nano Banana/Imagen model, one matching aspect ratio, one prompt editor, and one generation action. Any selected/current Veo or video signal, missing evidence, ambiguity, loading state, or editor-readiness problem fails closed. Configuration saying `mode=image` is never sufficient DOM evidence. If the current Flow UI does not expose an unambiguous control or result, the item is marked failed. It never assumes success.
+The adapter uses accessible roles, labels, visible control text, rendered image elements, download controls, progress semantics, and terminal error messages. The user manually selects any valid Flow image model. The adapter never opens, changes, or enforces the model selector; a safely detected model name is informational and may be unavailable. `preferred_model_hint`, including the prompt wrappers' historical `Nano Banana 2` value, remains semantic Batch ID metadata and is not a model requirement. Image-mode detection uses current selected-mode and composer/aspect/control evidence; selected video signals, ambiguous ownership, and insufficient readiness fail closed. Configuration saying `mode=image` is not sufficient DOM evidence. Aspect ratio and variant count are checked read-only before Start.
 
-## Quick start — PowerShell
+## Installation and offline quick start — Windows PowerShell
+
+The supported workflow targets Windows with installed Google Chrome, manual login,
+and a dedicated persistent profile. Active batches require a maximized Chrome
+window, which may remain behind other applications. Linux/macOS operation and
+other Python versions have not been validated for this public release.
+
+Use Python 3.12 for the documented environment. The Stage 3 offline verification
+uses Python 3.12.14, Pillow 12.3.0, and Node.js 24.20.0. Playwright is mocked in the
+offline suite and is not installed in that audit runtime; this is not evidence of
+live Chrome/Flow compatibility. The declared minimum is Playwright 1.60 because
+both CDP attachment paths use `is_local` (added in 1.58) and `no_defaults` (added
+in 1.60), as documented in the
+[Playwright API reference](https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp).
+No claim is made that the entire allowed dependency range has been tested.
+
+Install Python 3.12 and Node.js before following these commands. Node.js must be on
+`PATH` to run the embedded JavaScript observer regressions; those tests skip if
+Node.js is absent. It is a test prerequisite, not an application runtime dependency.
 
 ```powershell
 cd "C:\path\to\nano_banana_batch_public"
 
-python -m unittest discover -s tests -v
-python app.py inspect data\sample_batch.json
-python app.py run data\sample_batch.json --dry-run
-python app.py generate-one data\sample_batch.json --order 1 --preview
-python app.py download-one data\sample_batch.json --order 1 --preview
-python app.py run-batch data\sample_batch.json --preview
-python app.py run-prompt "A cinematic photograph of a futuristic city at night" --preview
+py -3.12 -m venv .venv
+& '.\.venv\Scripts\python.exe' -m pip install -r requirements.txt
+if (-not (Test-Path -LiteralPath '.\config.json')) {
+    Copy-Item config.example.json config.json
+}
+node --version
+
+& '.\.venv\Scripts\python.exe' -m unittest discover -s tests -v
+& '.\.venv\Scripts\python.exe' app.py inspect data\sample_batch.json
+& '.\.venv\Scripts\python.exe' app.py run data\sample_batch.json --dry-run
+& '.\.venv\Scripts\python.exe' app.py generate-one data\sample_batch.json --order 1 --preview
+& '.\.venv\Scripts\python.exe' app.py run-batch data\sample_batch.json --preview
+& '.\.venv\Scripts\python.exe' app.py run-prompt "A cinematic photograph of a futuristic city at night" --preview
+```
+
+These examples use synthetic inputs and do not launch Chrome or spend credits.
+`run --dry-run` does not create completed generation state. `download-one --preview`
+requires an existing matching run with completed generation and persisted
+candidates; it is therefore shown separately below rather than as a fresh-checkout
+command. Previews can read and validate existing local state/assets without writes.
+
+You may activate the environment with `.\.venv\Scripts\Activate.ps1`; subsequent
+`python` commands then use it. If activation is restricted by your PowerShell
+policy, continue using the explicit executable above. `run.bat` always invokes
+`.venv\Scripts\python.exe` directly and fails if that environment has not been
+created. Installed Chrome is used over CDP; bundled Playwright Chromium is not the
+supported login/browser path.
+
+Offline tests create disposable synthetic states and images. In a restricted
+environment whose default Windows temporary directory is not writable, first set
+test scratch space inside this checkout:
+
+```powershell
+New-Item -ItemType Directory -Path '.\.tmp\offline-tests' -Force | Out-Null
+$env:TEMP = (Resolve-Path '.\.tmp\offline-tests').Path
+$env:TMP = $env:TEMP
 ```
 
 ## Windows launcher — batch folder names
@@ -98,8 +149,6 @@ and shows their actual names. Existing runs are not renamed or migrated.
 ## Manual Chrome login bootstrap
 
 ```powershell
-python -m pip install -r requirements.txt
-Copy-Item config.example.json config.json
 $repo = (Get-Location).Path
 & 'C:\Program Files\Google\Chrome\Application\chrome.exe' "--user-data-dir=$repo\.flow_chrome_profile" 'https://flow.google.com/'
 ```
@@ -136,6 +185,13 @@ https://flow.google.com/
 ```
 
 Keep this Chrome instance open. Do not close it between `open-flow-debug` and `inspect-flow`. Debugging is bound to IPv4 loopback only; configuration rejects external bind addresses.
+
+Use only a trusted local debugging session and machine. CDP grants control over
+the selected authenticated browser; loopback binding does not authenticate local
+processes or prove that an arbitrary endpoint belongs to the dedicated profile.
+Do not attach to an everyday browser profile. Keep profile data, runtime state,
+prompts, assets, and raw diagnostic screenshots private; screenshots may show
+prompt/account information even when structured diagnostic text is filtered.
 
 The background switches keep timer work, occluded-window rendering, renderer
 process scheduling, and Windows native-occlusion calculation from reducing the
@@ -203,7 +259,9 @@ Review the reconnaissance and preview. Only when you intentionally want to spend
 python app.py generate-one data\sample_batch.json --order 1
 ```
 
-If a prior attempt failed or the process was interrupted while the item was `running`, inspect the Flow session for a possibly completed result before explicitly retrying:
+For a terminal failure requiring manual Retry, or interruption after Start may
+have been sent, inspect the Flow session for a possibly completed result before
+explicitly retrying. Retry authorizes a fresh generation and can spend credits:
 
 ```powershell
 python app.py generate-one data\sample_batch.json --order 1 --retry
@@ -211,7 +269,11 @@ python app.py generate-one data\sample_batch.json --order 1 --retry
 
 State is written beneath `runs/<semantic-batch-id-prefix>/run_state.json`. A completed item cannot be overwritten, even with `--retry`.
 
-A preview reads an existing state file without changing it. When the selected item has failed previously, it reports the persisted status, attempt count, last error, and that a future real execution requires `--retry`.
+A preview reads an existing state file without changing it and reports saved
+status, attempts, and errors. Sequential batch previews additionally distinguish
+available automatic retry budgets, external waiting, and blocked manual Retry.
+The single-item command does not provide the sequential runner's automatic policy
+retry. See the failure/retry rules below rather than treating every failure alike.
 
 ## Download one completed item
 
@@ -235,7 +297,7 @@ The command matches the persisted candidate UUID to exactly one `img[data-media-
 
 The preview prints this full visible UI path—`More options` → `Download submenu` → `1K Original size`—and an `<actual-extension>` destination until validated bytes determine the canonical suffix. The command does not fetch candidate URLs directly or use the generic browser Downloads folder as canonical storage.
 
-Because the browser is an already-running Chrome instance attached through CDP with Playwright defaults deliberately disabled, downloads are captured through Chrome's browser-level CDP download events instead of Playwright's `expect_download`. Before the final `1K Original size` activation, the command installs both Browser-domain event handlers and enables GUID-named downloads in a per-command staging directory. It requires exactly one `downloadWillBegin` and a terminal `downloadProgress`, validates the correlated GUID file, and only then commits it under the byte-derived canonical extension. Multiple begins or multiple completed files fail as `MULTIPLE_DOWNLOADS_FOR_CANDIDATE`; a completed staging file without the required begin event also fails closed and is not committed. Chrome's default download behavior is restored afterward.
+Because the browser is an already-running Chrome instance attached through CDP with Playwright defaults deliberately disabled, downloads are captured through Chrome's browser-level CDP download events instead of Playwright's `expect_download`. Before the final `1K Original size` activation, the command installs Browser-domain event handlers and enables GUID-named downloads in a staging directory. Exactly one `downloadWillBegin` and terminal `downloadProgress` are required; correlated bytes must validate before canonical installation. Multiple begins or completed files fail as `MULTIPLE_DOWNLOADS_FOR_CANDIDATE`; completed staging without a required begin event is not committed. Normal cleanup requests restoration of default download behavior. Intentional cancellation skips fresh browser cleanup RPCs; see the limitations below.
 
 Flow candidate identity is the persisted `data-media-id` UUID. A transient rendered `https://flow.google.com/asb/...` source is neither persisted nor used for identity matching. Download failures include a safe stage code and bounded facts such as exact CDP window state, activation method and acknowledgement, required-background-flag status, page-lifecycle keepalive status, event counts, GUID, terminal state, and staging filenames; request URLs, raw browser command lines, headers, browser storage, and authentication data are excluded.
 
@@ -245,9 +307,13 @@ its ownership, both attempt counters, expected paths, and image-integrity metada
 Recovery requires matching saved project/UUID ownership and checks available files
 against that earlier hash, size, format, MIME, and dimensions. It can finalize a
 matching canonical file or install matching staging bytes without overwriting an
-existing asset. Recovery checks file claims across all saved candidates, Order
-outputs, and pending records, and rechecks saved ownership before installation and
-completion persistence. It preserves generation and download attempt counts.
+existing asset. Both ordinary downloads and recovery check global file claims
+across all saved candidates, Order outputs, and pending records. Ordinary planning
+checks the deterministic canonical stem across supported extensions; the actual
+staging path is checked before browser download. Saved state and claims are
+rechecked before saving the receipt, installing bytes, and persisting completion.
+If the saved snapshot changed, ordinary execution stops without overwriting that
+newer state. Recovery preserves generation and download attempt counts.
 Preview stays read-only; missing or conflicting evidence stops recovery. Old untracked files and
 legacy runs without project evidence are never adopted automatically. This record
 binds expected content and logical ownership, not the identity of the physical writer.
@@ -328,7 +394,7 @@ For the example run directory, the immutable result is saved to `runs/example_ba
 
 That historical inspection established the two-phase structure: while closed, the first-level `button[role="menuitem"]` named `Download` has `aria-haspopup="menu"` and `aria-expanded="false"` but no `aria-controls`; after exposure it changes to `aria-expanded="true"` and adds `aria-controls` for the second-level menu. Its choices are enabled `1K Original size`, enabled `2K Upscaled`, and disabled `4K Upscaled`. A later physical-user trace selecting `1K Original size` confirmed the complete mechanism: a candidate-specific Flow-content GET returned a JPEG blob, a programmatic real anchor operation followed, and Chrome emitted `Browser.downloadWillBegin` plus completed `Browser.downloadProgress`. Such a report uses the example path `runs/example_batch/diagnostics/download_manual_order_0001_v01_physical-user-1k.json`; manually initiated native files stay in its adjacent `_staging` directory and are not canonical assets. Historical reports and files are not included here.
 
-Every file must exist, be non-empty, fully decode with Pillow, have positive dimensions, use PNG/JPEG/WebP content matching its extension, and pass SHA-256 calculation before it is marked downloaded. The browser download GUID and capture mechanism are persisted for diagnosis, but URLs, cookies, and tokens are not. Generation status remains `completed`; item and candidate download statuses are tracked independently. If a later candidate fails, prior validated candidates remain persisted and are skipped on the next `download-one` invocation.
+Every file must exist, be non-empty, fully decode with Pillow, have positive dimensions, use PNG/JPEG/WebP content matching its extension, and pass SHA-256 calculation before it is marked downloaded. The browser download GUID and capture mechanism are persisted for diagnosis. Raw download-request URLs and authentication information, including cookies and tokens, are not persisted; sanitized candidate source URLs may be retained as informational metadata. Generation status remains `completed`; item and candidate download statuses are tracked independently. If a later candidate fails, prior validated candidates remain persisted and are skipped on the next `download-one` invocation.
 
 Existing files and invalid completed-download metadata fail closed. `--overwrite` is the only way to request replacement, and it should be used only after inspecting the existing deterministic assets.
 
@@ -344,15 +410,17 @@ JSON file:
 ```
 
 `run-prompt` constructs one in-memory order with the deterministic visual ID
-`prompt_0001_visual_001` and explicitly declares the accepted image settings:
-Nano Banana 2, 16:9, and one variant. It then uses the same sequential generation,
+`prompt_0001_visual_001` and requests image mode, 16:9, and one variant. Its legacy
+`preferred_model_hint="Nano Banana 2"` preserves Batch IDs without enforcing the
+selected model. It then uses the same sequential generation,
 1K download, validation, canonical commit, state, and resume path as `run-batch`.
 Repeating the same prompt and run directory resumes or skips proven work. A different
 prompt has a different semantic batch identity and is rejected against that run
 directory. Real execution remains a manual normal-PowerShell operation under your
-normal Windows account; add `--preview` for a browser-free, state-free plan. Set Flow to
-Nano Banana 2, 16:9, and `x1` manually before real execution. The command verifies
-the visible settings and never changes them automatically.
+normal Windows account; add `--preview` for a browser-free plan that writes no
+state. Select a valid Flow image model, 16:9, and `x1` manually before real
+execution. The command checks image mode, aspect ratio, and variant count without
+changing them; it does not enforce the model's name.
 
 ## Run many prompts from a file
 
@@ -374,11 +442,12 @@ existing persisted state and skips or resumes work normally. Changing accepted
 prompt content changes the semantic batch ID, so the existing mismatch protection
 rejects that run directory. Because variant count participates in the identity, an
 older two-variant prompt-wrapper run is intentionally not reusable as a one-variant
-run. Set Flow to Nano Banana 2, 16:9, and `x1` manually; verification is read-only.
+run. Select any valid Flow image model, 16:9, and `x1` manually; mode/aspect/variant
+verification is read-only and model names are informational.
 
 ## Generic sequential batch runner
 
-The existing `run` command remains state initialization/dry-run only. `run-batch` accepts any non-empty batch that passes the existing batch contract: unique positive contiguous orders starting at 1, unique `visual_id` values, and non-empty prompts. Input items are canonicalized by validated order and processed one at a time. The current Flow acceptance configuration remains two candidates per order. The runner does not duplicate Flow logic: each order delegates to `execute_one` and then `execute_download_one`, so candidate UUID matching, `1K Original size`, native CDP correlation, image validation, canonical naming, and atomic state/file behavior remain the proven implementations.
+The existing `run` command remains state initialization/dry-run only. `run-batch` accepts any non-empty batch with unique positive contiguous Orders starting at 1, unique `visual_id` values, and non-empty prompts. Orders are validated and processed sequentially. External x1/x2 batches are supported; the sample config requests x2. Each Order delegates to `execute_one` and `execute_download_one`, retaining UUID matching, `1K Original size`, CDP correlation, image validation, canonical naming, and atomic JSON state replacement. File installation uses a no-overwrite hard link when available and a non-atomic exclusive-copy fallback; see the limitations below.
 
 Preview the persisted resume plan without creating a browser session or changing state:
 
@@ -386,7 +455,11 @@ Preview the persisted resume plan without creating a browser session or changing
 & '.\.venv\Scripts\python.exe' app.py run-batch 'data\sample_batch.json' --preview --run-dir 'runs\example_batch'
 ```
 
-For the accepted sample state, all three orders are decoded and metadata-checked through the existing validation path and report `completed -> skip`, `complete and valid -> skip`, with both candidates `skip_valid`. A new N-item batch prints the corresponding generation and download plan for every item. Preview submits no prompt, performs no browser or download action, spends no credits, and writes no state.
+Historical private sample-state evidence reported all three Orders as completed
+with validated candidates skipped. That state and its assets are not included.
+A fresh checkout prints a pending plan; a matching existing run is decoded and
+its assets are revalidated before skip actions are reported. Preview submits no
+prompt, performs no browser/download action, spends no credits, and writes no state.
 
 After reviewing that plan, the corresponding real sequential run is:
 
@@ -394,7 +467,7 @@ After reviewing that plan, the corresponding real sequential run is:
 & '.\.venv\Scripts\python.exe' app.py run-batch 'data\sample_batch.json' --run-dir 'runs\example_batch'
 ```
 
-Execution follows the batch loader's validated canonical order for all N items. A completed generation is never regenerated. Valid completed candidate assets are never opened or overwritten. A completed generation with incomplete downloads resumes only those downloads; a previously committed candidate is revalidated and skipped. Any failure stops the loop before the next order. A later invocation resumes from persisted state. Failed or interrupted generation requires the explicit `--retry` flag; download retries remain automatic under the existing download-state rules. No threads, workers, or concurrent tasks are used.
+Execution follows the batch loader's validated Order sequence. Completed generation is never regenerated. Existing completed assets are opened for Pillow decoding and metadata/hash revalidation, then skipped without replacement. Completed generation with incomplete downloads resumes only the necessary downloads. An unresolved failure stops before the next Order. A later invocation uses saved state and the failure-specific rules below. Failed downloads can be attempted again on Resume without a generation retry; ambiguous canonical files remain protected. No concurrent Orders or run-state writers are supported.
 
 New launcher-managed runs create exactly one Flow project and persist its canonical
 UUID before Order 1. Resume and explicit Retry reopen that exact saved project and
@@ -403,17 +476,89 @@ therefore resumes the exact persisted candidate download without incrementing it
 generation attempt count, then advances to the next pending order after a successful
 canonical commit.
 
+## Failure attribution, Retry, and cancellation
+
+Start is an exactly-once action for each submitted attempt. The observer's
+failure baseline is established before Start. Only failure content proven new or
+changed for that attempt can establish attribution; DOM activity in a shared
+history ancestor alone is insufficient. Historical/remounted cards and ambiguous
+provenance do not qualify as confirmed failures. Lost post-Start evidence reports
+terminal `FLOW_FAILURE_ATTRIBUTION_AMBIGUOUS`, stops waiting, and requires manual
+Retry rather than accepting success or consuming an automatic retry budget.
+
+| Current-attempt evidence/state | Existing recovery rule |
+|---|---|
+| Exact policy rejection | Sequential batch commands allow one durable automatic retry per Order, using the same prompt/project. A repeat requires explicit Retry. `generate-one` does not enable that automatic policy retry. |
+| Exact generic generation failure | At most two durable automatic retries per Order with the same prompt/project; a third failure requires explicit Retry. |
+| Exact unusual-activity failure | One bounded recovery within the same live Flow session, reopening the saved project. A repeat in that operation requires manual Retry. Each new Start is durably counted. |
+| Exact high-demand failure | Stops immediately and requires explicit Retry; no automatic retry/backoff budget is consumed. |
+| Usage-limit evidence | Persists `waiting_for_flow_limit_reset`. After the limit resets, Resume with the same command, without `--retry`. |
+| Proven failure/cancellation before Start was sent | Remains not submitted and normally resumable; the provisional generation attempt is rolled back. |
+| Other terminal failure or submitted/ambiguous interruption | Stops the Order and protects against duplicate submission; inspect the run before explicit Retry. |
+
+Policy and generic retry counters are persisted before the retry Start; Resume
+does not reset them. No recovery rotates the Flow project, substitutes a candidate,
+or bypasses account restrictions. Only exact, eligible failure classifications
+receive the automatic paths above.
+
+During generation/download batches, one Ctrl+C requests cancellation. Direct batch
+commands exit 130 after unwind; the launcher offers its recovery menu. A
+submitted/ambiguous attempt retains explicit Retry protection. Intentional batch
+teardown disconnects the driver without closing
+externally launched Chrome and skips fresh CDP/browser cleanup calls, including
+download-behavior reset and staging deletion. Completed generation, candidate
+UUIDs, and committed assets remain available for download-only Resume.
+
+## Operational limitations and verification status
+
+- **Single writer:** run one invocation per run directory. There is no lock or
+  compare-and-swap state transaction. Ordinary download checks reject a changed
+  saved snapshot; they do not make concurrent writers supported.
+- **Filesystem races:** checks cannot prevent mutation after the last validation.
+  Trusted ownership/content checks are evidence at their boundaries, not a proof
+  of which physical process installed identical bytes.
+- **File installation:** JSON state uses flushed temporary files and atomic
+  replacement. No-overwrite file installation prefers a hard link. Its exclusive
+  copy fallback is non-atomic; interruption may leave a partial canonical file.
+  Recovery detects mismatching bytes and protects that file even when valid
+  staging remains, rather than overwriting it to force progress.
+- **Staging leftovers:** ownership rejection, cancellation, and interrupted pending commits may leave
+  staging files/directories. Successful receipt recovery does not recursively
+  clean historical staging directories.
+- **Redirected assets root:** the older ordinary path helper confines paths to the
+  resolved `assets` directory without proving that directory lies in the trusted
+  run root. Pending path checks reject symlink/junction redirection later, but
+  ordinary staging may already have started. Use trusted run directories with
+  unredirected `assets`; this separate limitation is not fixed in Stage 3.
+- **Browser trust:** attach only to the dedicated, manually authenticated local
+  Chrome session. Loopback CDP is privileged; keep runtime data and screenshots
+  private and do not expose its port externally.
+- **Latency:** the bounded historical-failure scan can aggregate large subtrees.
+  Synthetic deep-DOM measurements were around three seconds; this is not a
+  measured real Flow baseline cost. No performance optimization was added here.
+- **Acceptance:** current public-checkout behavior is offline-tested with synthetic
+  files and browser doubles. The Stage 2.1/2.2 corrections and Stage 3 ownership
+  boundaries have not received real Chrome/CDP/Flow acceptance. Earlier private
+  milestones do not establish current live UI compatibility or complete recovery
+  acceptance, including post-generation Ctrl+C and edited-policy-prompt completion.
+
+Validation evidence and the independent developer's direct Python contribution,
+engineering decisions, and Codex-assisted implementation/testing are recorded in
+[the engineering log](docs/ENGINEERING_LOG.md). Historical fixtures and private
+acceptance outputs are not distributed. Public Git identity presentation remains
+the owner's separate decision; no release or publication is implied by these checks.
+
 ## Flow reconnaissance
 
-`inspect-flow` is read-only. After a bounded SPA-stabilization wait, it reports the sanitized current URL, title, document readiness, visible body-text length, buttons, textboxes/textareas/contenteditables, comboboxes, tabs, menus, images/videos, iframes, selected controls, model/aspect/generation signals, and loading/error states. It writes a diagnostic screenshot to `diagnostics/flow_inspect.png`. Query strings, fragments, data/blob URLs, email addresses, and Google Account control labels are omitted or redacted.
+`inspect-flow` is read-only with respect to Flow UI actions. After bounded SPA stabilization, it reports sanitized URL/title/readiness, control and media metadata, selected settings, and loading/error evidence. It writes a local screenshot to `diagnostics/flow_inspect.png`. Structured text removes or redacts query strings, fragments, data/blob URLs, email addresses, and Google Account labels. These filters do not redact screenshot pixels; keep the image private.
 
 For download-toolbar layout measurements on the currently open Flow project, run `& '.\.venv\Scripts\python.exe' .\app.py inspect-flow-download-layout`. This read-only command reports the exact CDP window state, outer/inner/viewport dimensions, normalized project identity, and at most ten visible candidate tiles with safe `data-media-id`, bounding-box, and semantic `More options` presence facts. It does not hover, click, type, navigate, take a screenshot, or manipulate the window, and it deliberately does not guess a responsive breakpoint.
 
-The authenticated CDP inspection confirmed the configured project is fully rendered: `document.readyState` is `complete`, the prompt surface is a unique visible `contenteditable="true"` element, the submission control is exposed as `Start generation`, and visible settings text reports `Nano Banana Pro`, `crop_16_9`, and `x2`. No loading or error state was visible. On this UI there is no separate accessible Image tab, so the read-only preflight reports `confidence: inferred` and includes those exact positive signals; it does not claim an explicit tab. Screenshot capture is read-only and capped at five seconds; if a later refresh times out, the prior diagnostic is retained and reported instead of allowing inspection to hang.
+Historical evidence from the separate application described a rendered authenticated editor with a unique contenteditable prompt surface, a `Start generation` control, and informational `Nano Banana Pro`, `crop_16_9`, and `x2` labels. That private inspection is not a public-checkout acceptance result. The adapter permits inferred image-mode evidence without claiming an explicit Image tab or enforcing that model name. Screenshot capture is capped at five seconds; a failed refresh retains prior local diagnostics.
 
-The configured project URL and dedicated profile have been confirmed to open the real authenticated Flow editor in normal Chrome. Bundled Playwright Chromium was rejected by Google as an unsupported or insecure sign-in environment, so all authentication remains manual. Reconnaissance now attaches to the already-working normal Chrome instance over local CDP instead of opening the profile a second time.
+Historical manual evidence favored installed Chrome for authentication; bundled Playwright Chromium was rejected during that earlier login attempt. This does not verify the current public checkout against live Flow. Authentication remains manual, with the adapter attaching to installed Chrome over local CDP.
 
-Candidate completion requires new visible rendered image assets (preferred) or new user-facing download controls, no new progress signal, and a stable result across three polls. Candidate source URLs are stored only after removing query strings and fragments. Live reconnaissance confirmed that each completed candidate's persisted UUID maps to one `flow-image-tile`; a mouse move to the image center reveals one tile-specific `More options` control whose menu contains one `Download` action.
+Candidate completion requires the configured count of new candidate UUIDs outside the pre-Start baseline, disappearance of current progress, and stability across result polls. Candidate source URLs, when retained, are sanitized informational metadata; selection and Resume use the persisted UUID. Earlier private reconnaissance observed UUID-owned `flow-image-tile` controls; current public-checkout UI compatibility remains unverified.
 
 ## Sample input
 
@@ -445,3 +590,15 @@ excluded from this public copy. The acceptance results and operational
 constraints are recorded in `AGENTS.md`. The automatic maximized-window and
 project-per-batch hardening is offline-tested; its final bounded real two-prompt
 acceptance remains pending.
+
+## License
+
+Licensed under the [MIT License](LICENSE).
+
+Copyright (c) 2026 Amarsan Tsyrendorzhiev
+
+Third-party dependencies retain their own licenses:
+[Playwright (Apache 2.0)](https://github.com/microsoft/playwright-python/blob/v1.60.0/LICENSE)
+and [Pillow (MIT-CMU)](https://github.com/python-pillow/Pillow/blob/12.3.0/LICENSE).
+They are installed separately, rather than vendored in this repository. The
+project license does not grant rights to Google Flow's service or trademarks.
