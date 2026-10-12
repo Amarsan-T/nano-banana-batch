@@ -8,6 +8,9 @@ with Google Flow's terms. The project is licensed under the [MIT License](LICENS
 
 It accepts the same basic `batch.json` shape exported by YouTube Factory, preserves each `visual_id`, and is intentionally separated from the editing pipeline.
 
+See the [development history](docs/DEVELOPMENT_HISTORY.md) for project origins,
+milestones, and provenance limitations.
+
 ## Public repository and private local data
 
 This public copy contains source, offline tests, and reviewed example inputs.
