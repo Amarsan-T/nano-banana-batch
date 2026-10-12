@@ -713,7 +713,8 @@ def validate_pending_download_ownership(
 
 
 def _assert_pending_download_file_claims(
-    state: RunState, selected: CandidateRecord, run_dir: Path, canonical: Path, staged: Path,
+    state: RunState, selected: CandidateRecord, run_dir: Path, canonical: Path,
+    staged: Path | None, *, allow_selected_output: bool = False,
 ) -> None:
     """Reject competing saved file claims, independently of candidate UUID ownership."""
     root = run_dir.resolve()
@@ -741,13 +742,26 @@ def _assert_pending_download_file_claims(
             path.parent == canonical.parent and path.stem == canonical.stem
         )
 
+    selected_output_seen = False
     for saved_item in state.items:
         if not isinstance(saved_item.output_files, list):
             raise ValueError("Saved Order output ownership must be a list of paths.")
         for path in saved_item.output_files:
-            if conflicts(resolve_claim(path)):
-                # The selected candidate is still pending, so even its own Order
-                # cannot legitimately have registered either file as completed.
+            resolved = resolve_claim(path)
+            if conflicts(resolved):
+                # Ordinary skip/explicit overwrite may retain exactly one proven
+                # registration of this candidate. Pending recovery permits none.
+                if (
+                    allow_selected_output and not selected_output_seen
+                    and any(candidate is selected for candidate in saved_item.candidates)
+                    and resolved == canonical and selected.local_path is not None
+                    and resolve_claim(selected.local_path) == canonical
+                    and (selected.local_relative_path is None or resolve_claim(
+                        selected.local_relative_path, relative_only=True,
+                    ) == canonical)
+                ):
+                    selected_output_seen = True
+                    continue
                 raise ValueError("Pending download file is already registered in Order output_files.")
         for other in saved_item.candidates:
             if other is selected:
@@ -771,6 +785,40 @@ def _assert_pending_download_file_claims(
             other_pending.validate()
             if any(conflicts(path) for path in _pending_download_paths(other_pending, saved_item, root)):
                 raise ValueError("Multiple pending candidates claim the same file path.")
+
+
+class _DownloadFileOwnershipError(ValueError):
+    """Stop without replacing state when a download boundary cannot prove ownership."""
+
+
+def _assert_current_download_file_claims(
+    state: RunState, item: RunItemState, candidate: CandidateRecord,
+    run_dir: Path, canonical: Path, staged: Path | None, *, allow_selected_output: bool,
+) -> None:
+    """Recheck the saved snapshot and global claims before ordinary writes.
+
+    Reject any changed snapshot under the existing single-writer contract. This
+    is a bounded reread, not a lock or compare-and-swap filesystem transaction.
+    """
+    cancellation_checkpoint("download_file_ownership")
+    try:
+        saved = RunStateStore(run_dir / "run_state.json").load()
+        if saved != state:
+            raise ValueError("Run state changed during download; refusing stale ownership writes.")
+        owners = [entry for entry in saved.items if entry.order == item.order]
+        if len(owners) != 1:
+            raise ValueError("Download requires exactly one saved Order.")
+        matches = [entry for entry in owners[0].candidates if entry.variant == candidate.variant]
+        if len(matches) != 1:
+            raise ValueError("Download requires exactly one saved candidate variant.")
+        _assert_unique_download_ownership(saved, owners[0], matches[0])
+        _assert_pending_download_file_claims(
+            saved, matches[0], run_dir, canonical, staged,
+            allow_selected_output=allow_selected_output,
+        )
+    except (ValueError, TypeError, OSError) as exc:
+        raise _DownloadFileOwnershipError(str(exc)) from exc
+    cancellation_checkpoint("download_file_ownership")
 
 
 def _pending_download_paths(
@@ -931,6 +979,11 @@ def plan_download_one(
             action = "overwrite"
         if action != "skip_valid":
             _assert_unique_download_ownership(state, state_item, candidate)
+        if candidate.pending_download_commit is None:
+            _assert_pending_download_file_claims(
+                state, candidate, run_dir, destination, None,
+                allow_selected_output=action in {"skip_valid", "overwrite"},
+            )
         plans.append(
             CandidateDownloadPlan(
                 candidate=candidate,
@@ -1339,10 +1392,16 @@ def execute_repair_order_candidates(
 @contextmanager
 def _download_staging_directory(asset_dir: Path, *, preserve: Callable[[], bool] | None = None):
     temporary = tempfile.TemporaryDirectory(prefix=".staging-", dir=asset_dir)
+    ownership_rejected = False
     try:
         yield temporary.name
+    except _DownloadFileOwnershipError:
+        # A changed snapshot may now claim these bytes in another receipt.
+        # Do not erase disputed evidence while rejecting stale ownership.
+        ownership_rejected = True
+        raise
     finally:
-        if cancellation_requested() or (preserve is not None and preserve()):
+        if ownership_rejected or cancellation_requested() or (preserve is not None and preserve()):
             # Chrome may still be writing. Do not enter recursive filesystem
             # cleanup during intentional unwind, including the GC finalizer.
             temporary._finalizer.detach()
@@ -1378,6 +1437,11 @@ def execute_download_one(
         )
         return plan.state, plan.item
 
+    for candidate_plan in pending:
+        _assert_current_download_file_claims(
+            state, state_item, candidate_plan.candidate, run_dir, candidate_plan.destination, None,
+            allow_selected_output=candidate_plan.action == "overwrite",
+        )
     state.version = max(state.version, 3)
     state_item.download_status = "running"
     state_item.download_attempt_count += 1
@@ -1387,6 +1451,7 @@ def execute_download_one(
     state.updated_at = state_item.download_started_at
     store.save(state)
 
+    last_completed_download = None
     plan.asset_dir.mkdir(parents=True, exist_ok=True)
     with _download_staging_directory(
         plan.asset_dir,
@@ -1397,12 +1462,20 @@ def execute_download_one(
             candidate = candidate_plan.candidate
             if candidate_plan.action == "skip_valid":
                 continue
+            staged_path = (staging_dir / f"v{candidate.variant:02d}.download").resolve()
+            _assert_current_download_file_claims(
+                state, state_item, candidate, run_dir, candidate_plan.destination, staged_path,
+                allow_selected_output=candidate_plan.action == "overwrite",
+            )
             candidate.download_status = "running"
             candidate.download_error = None
             state.updated_at = utc_now()
             store.save(state)
-            staged_path = (staging_dir / f"v{candidate.variant:02d}.download").resolve()
             try:
+                _assert_current_download_file_claims(
+                    state, state_item, candidate, run_dir, candidate_plan.destination, staged_path,
+                    allow_selected_output=candidate_plan.action == "overwrite",
+                )
                 browser_result = interruptible_call(
                     "download_candidate_pipeline",
                     "adapter_download_candidate",
@@ -1444,6 +1517,10 @@ def execute_download_one(
                     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
                     browser_result.candidate_id,
                 )
+                _assert_current_download_file_claims(
+                    state, state_item, candidate, run_dir, final_destination, staged_path,
+                    allow_selected_output=candidate_plan.action == "overwrite",
+                )
                 if has_uuid or state.flow_project_required:
                     pending_record = PendingDownloadCommit(
                         record_version=1, batch_id=state.batch_id,
@@ -1468,6 +1545,10 @@ def execute_download_one(
                     )
                     if _pending_download_paths(pending_record, state_item, run_dir) != (final_destination, staged_path):
                         raise ValueError("Pending paths changed before canonical installation.")
+                _assert_current_download_file_claims(
+                    state, state_item, candidate, run_dir, final_destination, staged_path,
+                    allow_selected_output=candidate_plan.action == "overwrite",
+                )
                 interruptible_call(
                     "download_atomic_commit",
                     "atomic_canonical_commit",
@@ -1494,14 +1575,23 @@ def execute_download_one(
                     metadata = _validate_pending_download_content(
                         candidate.pending_download_commit, final_destination, staged_path,
                     )
+                _assert_current_download_file_claims(
+                    state, state_item, candidate, run_dir, final_destination, staged_path,
+                    allow_selected_output=candidate_plan.action == "overwrite",
+                )
                 _persist_download_completion(
                     state, state_item, candidate, final_destination, metadata, browser_result, run_dir,
                 )
+                last_completed_download = (candidate, final_destination, staged_path)
             except Exception as exc:
-                if candidate.pending_download_commit is not None:
-                    # Keep the durable running receipt intact for local recovery.
-                    # Completion persistence failures must not invalidate it.
+                if candidate.pending_download_commit is not None or isinstance(exc, _DownloadFileOwnershipError):
+                    # Preserve a durable receipt or changed saved snapshot;
+                    # neither completion nor failure may overwrite that evidence.
                     raise
+                _assert_current_download_file_claims(
+                    state, state_item, candidate, run_dir, candidate_plan.destination, staged_path,
+                    allow_selected_output=candidate_plan.action == "overwrite",
+                )
                 error = f"{type(exc).__name__}: {exc}"
                 candidate.download_status = "failed"
                 candidate.download_error = error
@@ -1512,6 +1602,11 @@ def execute_download_one(
                 store.save(state)
                 raise
 
+    if last_completed_download is not None:
+        candidate, canonical, staged = last_completed_download
+        _assert_current_download_file_claims(
+            state, state_item, candidate, run_dir, canonical, staged, allow_selected_output=True,
+        )
     state_item.download_status = "completed"
     state_item.download_error = None
     state_item.download_completed_at = utc_now()
