@@ -3246,10 +3246,26 @@ def _safe_label(value: str | None) -> str:
 
 
 def _safe_current_generation_failure(value: str) -> str:
-    """Keep exact unusual-activity classification intact before label bounding."""
-    if _UNUSUAL_ACTIVITY_GENERATION_FAILURE_PATTERN.search(value):
-        return _UNUSUAL_ACTIVITY_CANONICAL_FAILURE
-    return _safe_label(value)
+    """Expose fixed failure semantics, never arbitrary qualified DOM text."""
+    # Preserve the existing unusual-activity normalization priority. Every other
+    # recognized signature also gets fixed text; incidental UI content is private.
+    for pattern, canonical in (
+        (_UNUSUAL_ACTIVITY_GENERATION_FAILURE_PATTERN, _UNUSUAL_ACTIVITY_CANONICAL_FAILURE),
+        (_FLOW_USAGE_LIMIT_PATTERN, "You've reached your usage limit."),
+        (_POLICY_VIOLATION_GENERATION_FAILURE_PATTERN,
+         "Failed. This generation might violate our policies. "
+         "Please try a different prompt or send feedback. "
+         "You have not been charged for this generation."),
+        (_GENERIC_GENERATION_FAILURE_PATTERN,
+         "Failed. Sorry, this image failed to generate. "
+         "You have not been charged for this generation."),
+        (_HIGH_DEMAND_GENERATION_FAILURE_PATTERN,
+         "Failed. Flow is experiencing high demand. Please try again later. "
+         "You have not been charged for this generation."),
+    ):
+        if pattern.search(value):
+            return canonical
+    return "Generation failed for the current attempt (unrecognized failure message)."
 
 
 def _normalize_model_name(value: str | None) -> str:
@@ -9263,7 +9279,9 @@ class FlowSession:
             if any(_HIGH_DEMAND_GENERATION_FAILURE_PATTERN.search(failure) for failure in failures):
                 raise FlowHighDemand()
             raise FlowAutomationError(
-                f"Flow reported a terminal failure for the current generation: {failures[0]}"
+                "Flow reported a terminal failure for the current generation: "
+                "unrecognized failure message; raw UI text was omitted. "
+                "Explicit manual Retry is required."
             )
 
     def _stop_current_generation_attempt_observation(self) -> None:

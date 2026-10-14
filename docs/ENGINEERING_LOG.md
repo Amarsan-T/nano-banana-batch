@@ -852,3 +852,75 @@ the developer's validator code are preserved. Branch remains `main` at `80a772c`
 the index is unchanged, no remote is configured, and nothing was committed,
 rewritten, pushed, or published. Original/private projects, real profiles,
 Chrome/CDP sessions, and live Flow were not accessed. Work stops for review.
+
+## Post-publication P1 correction — unknown failure-text privacy (2026-10-14)
+
+The public checkout was verified clean on `main` at
+`4b84be430ad476858b8d36dd7479fb864717d1dc`, with the six published commits intact.
+The developer reviewed the offline audit and authorized only the unknown
+generation-failure privacy correction and its regressions, leaving the other
+P2/P3 findings for separate decisions. Codex implemented this patch and tests
+under that direction. The earlier record of the developer's direct Python work
+and collaborative engineering decisions is preserved without new authorship claims.
+
+The reproduced path was qualified observer evidence -> Python failure text ->
+terminal exception -> saved Order error -> CLI/preview output. Label truncation
+and email/account redaction did not remove arbitrary prompt text, query-bearing
+URLs, filesystem paths, or credential-like text. This establishes a synthetic
+privacy gap, not evidence that actual Flow credentials were exposed.
+
+Before production changes, the new end-to-end regression failed in all ten
+subcases: five synthetic UI canary types with diagnostics disabled and enabled.
+It ran as one test with ten assertion failures, zero errors or skips, in 3.395
+seconds. The production diff was empty at that point. Those scenarios and
+rejection assertions remain; subsequent checks also cover JSON-escaped canaries
+and individual fake authentication/query values.
+
+Only two adapter functions changed:
+
+- `_safe_current_generation_failure()` uses existing recognized signatures to
+  return fixed canonical text. Unrecognized qualified failures return fixed
+  unknown-failure semantics. No arbitrary UI text leaves this helper.
+- `_raise_for_current_generation_attempt_failure()` retains the existing typed
+  classifiers and emits a fixed terminal/manual-Retry message for its unknown
+  fallback, without interpolating failure text.
+
+No new exception type, state field, failure code, browser interaction, navigation,
+Start, diagnostic collection, or recovery loop was introduced. Existing safe
+phase/count/timing metadata and the diagnostic category prefix remain available.
+Unknown failures retain the ordinary `FlowAutomationError` path, failed Order,
+consumed submitted attempt, unset confirmed generation-error code, and explicit
+manual Retry protection. Automatic retry budgets remain unchanged.
+
+The eight tests in `tests/test_flow_failure_privacy.py` cover the real embedded
+observer, classification, generation failure diagnostics, runner persistence,
+exception representations, CLI and saved-error preview output; all five canary
+types; known policy/generic/unusual/high-demand/usage classifications; historical
+and remounted ambiguous messages; similar unknown wording; and successful manual
+Retry with the original project, preserved counts, and unique candidate identities.
+The synthetic UI canaries differ from the fixture's source prompts; intentional
+source-prompt persistence is unchanged.
+
+Validation:
+
+- Eight new focused tests passed in 5.781 seconds, zero failures/errors/skips.
+- Existing attribution, recovery-boundary, exact failure/retry, project, policy
+  prompt-edit, persistence, CLI, and public-security regressions: 222 passed in
+  65.726 seconds, zero failures/errors/skips.
+- Complete offline suite: 1,078 passed in 312.832 seconds, zero failures/errors/skips.
+- `compileall app.py nano_batch tests`, actual observer begin/arm/poll Node syntax,
+  and whitespace/UTF-8 checks passed. AST comparison confirms only the two adapter
+  functions changed; the observer JavaScript and runner/state/download/CLI
+  implementations are unchanged. No existing test was removed or weakened.
+
+The raw DOM still exists and is read transiently for detection. This is a boundary
+for qualified failure output, not a sanitizer for every transport exception or
+historical saved error. Older runtime errors are not retroactively rewritten;
+private source prompts and runtime data must still remain private. Live Flow
+acceptance was not performed. The separate filesystem, latency, and diagnostic
+label findings were not addressed.
+
+Only the public checkout and synthetic offline fixtures were used. The private
+original, private runtime/profile data, real Chrome/CDP/Flow sessions, and external
+APIs were not accessed. No files were staged, no commit or push was made, and the
+published repository remains unchanged. This local correction stops for review.
