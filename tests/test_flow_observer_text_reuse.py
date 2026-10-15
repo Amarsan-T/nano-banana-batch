@@ -80,7 +80,7 @@ _REFERENCE_CALLBACK = r"""state.observer = new MutationObserver((records) => {
 
 def reference_begin(begin):
     """Replace only the changed blocks; all attribution logic stays shared."""
-    start = begin.index("const normalizedTexts = (element) => {")
+    start = begin.index("const normalizedTexts = (element")
     end = begin.index("const failurePattern =", start)
     begin = begin[:start] + _REFERENCE_NORMALIZER + begin[end:]
     start = begin.index("state.observer = new MutationObserver((records) => {")
@@ -195,8 +195,8 @@ function cacheTree(root) {
 function instrument(script) {
   const cached=script.includes('let callbackTexts = null;');
   return script
-    .replace('const normalizedTexts = (element) => {',
-      'const normalizedTexts = (element) => { normalizationRequest();')
+    .replace(/const normalizedTexts = \(element(?:, baselineCapture = false)?\) => \{/,
+      '$& normalizationRequest();')
     .replace('const values = readTiming ? [','noteNormalization(element); const values = readTiming ? [')
     .replace('callbackTexts = new WeakMap();','callbackTexts = new ProbeTextCache();')
     .replace('state.observer = new MutationObserver',

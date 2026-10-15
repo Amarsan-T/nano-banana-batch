@@ -8515,7 +8515,7 @@ class FlowSession:
               // Callback processing reads DOM text synchronously without mutating it.
               // Reuse filtered text only in that callback, never baseline/poll reads.
               let callbackTexts = null;
-              const normalizedTexts = (element) => {
+              const normalizedTexts = (element, baselineCapture = false) => {
                 const cached = callbackTexts?.get(element);
                 if (cached) return cached;
                 const values = readTiming ? [
@@ -8529,7 +8529,13 @@ class FlowSession:
                 ];
                 const unique = [];
                 for (const [index, value] of values.entries()) {
-                  const text = readTiming ? readStep('normalization', () =>
+                  // Appending cannot shorten this normalized/trimmed prefix.
+                  // Reject only evidence the full normalization also rejects;
+                  // uncertain prefixes still use the original full operation.
+                  const oversized = baselineCapture &&
+                    String(value || '').length > 1200 &&
+                    String(value || '').slice(0, 2400).replace(/\s+/g, ' ').trim().length > 1200;
+                  const text = oversized ? '' : readTiming ? readStep('normalization', () =>
                     String(value || '').replace(/\s+/g, ' ').trim()) :
                     String(value || '').replace(/\s+/g, ' ').trim();
                   // A label is its own message channel, never descendant text.
@@ -8725,7 +8731,7 @@ class FlowSession:
                 let element, count = 0;
                 while ((element = walker.nextNode())) {
                   if (++count > 10000) { state.failureBaselineTruncated = true; break; }
-                  const texts = normalizedTexts(element);
+                  const texts = normalizedTexts(element, true);
                   const signature = evidence(complete([texts.ariaLabel || ''])
                     ? [texts.ariaLabel] : texts);
                   state.failureBaseline.set(element, signature);

@@ -1655,3 +1655,132 @@ remote baseline gate the single authorized commit and normal push. Their final
 SHA/publication status is reported separately. Only public source and disposable
 synthetic runs were used; no private original, real run, profile, image/prompt
 file, authenticated browser or Flow operation was accessed.
+
+## Historical baseline normalization optimization
+
+The owner reviewed the read-only baseline performance investigation and selected
+the exact oversized-channel rejection approach, authorizing its narrow
+implementation, offline regression work, and one commit/publication after all
+safety gates pass. Codex implemented the correction and test harness under that
+direction. This entry records current work, without changing earlier authorship
+or acceptance records.
+
+The verified starting checkout was clean `main` at `06ace77`, with 13 commits and
+the expected public remote. Inspection confirmed that baseline capture calls
+`normalizedTexts()` once per visited element. There is no useful per-element
+reuse inside that traversal. The expensive work is repeated ancestor/descendant
+aggregation through both text getters, followed by full whitespace normalization
+before the 1,200-code-unit evidence filter. The 10,000-element traversal limit
+does not bound aggregate characters, subtree visits, or synchronous duration.
+
+Only `_begin_current_generation_attempt_observation()` changes in production:
+its private `normalizedTexts(element, baselineCapture = false)` helper receives
+`true` only from `captureFailureBaseline()`. All three raw properties are still
+read in the original order: aria-label, innerText, textContent. For a raw channel
+longer than 1,200 UTF-16 code units, baseline processing normalizes its first 2,400
+code units with the original ECMAScript whitespace replacement and trim. It
+rejects the channel only if that result already exceeds 1,200. Otherwise, it
+performs the original full normalization. Accepted evidence is never truncated.
+Callback-local caching, direct helper calls, polling and their diagnostic timing
+stages retain the original normalization operation. No traversal cache is added.
+
+The proof is monotonicity of this particular whitespace normalization under
+appending. Continuing a prefix cannot remove its already retained non-whitespace
+content or internal separators. Trimming a prefix's final whitespace can only
+underestimate the eventual normalized length. UTF-16 slicing may split a surrogate
+pair, but neither half becomes ECMAScript whitespace and appending cannot reduce
+the retained code-unit count. This is not Unicode composition normalization.
+Thus a normalized prefix over the existing limit proves the full channel is also
+over that limit. Empty/oversized labels retain their existing empty independent
+label representation; eligible labels and descendant channels remain independent.
+Long leading/trailing whitespace and inconclusive prefixes use full normalization.
+
+Regression-first: before production edits, the initial 11-test module had exactly
+two workload failures, zero errors/skips. The 600-deep fixture still supplied
+12,079,500 characters to normalization and the overlapping fixture supplied
+13,465,800; both failed their required fourfold-work-reduction assertions. The
+other semantic checks passed. Both failing assertions were retained unchanged.
+The final module contains 12 tests, including a no-new-work preserved-rearm check.
+
+The frozen reference normalizer plus restoration of the baseline call reproduces
+the entire pre-optimization observer script from HEAD exactly. AST comparison
+confirmed that every other FlowSession method is unchanged. Existing callback
+tests needed only source-extraction/instrumentation matching for the optional
+parameter; no existing assertion was removed or weakened. Differential diagnostic
+comparisons use a deterministic synthetic browser clock, comparing the complete
+serialized diagnostic object, including nested timing stages. An initial
+comparison using real elapsed times exposed test-clock noise; it was corrected
+without changing production behavior or omitting diagnostic fields.
+
+Differential cases retain per-element baseline signatures, historical evidence,
+local mutation and progress provenance, retained ordering, overflow/ambiguity,
+failure classifications and diagnostic representation. Coverage includes nested,
+hidden and remounted historical messages, identical wording after local reset or
+qualified progress, independent complete labels, first arm and preserved rearm,
+both observation limits, all supported failure classes and unknown-error privacy.
+The channel test compares 5,542 deterministic vectors, including Unicode
+whitespace, 1,199/1,200/1,201 and 2,399/2,400/2,401 boundaries, long whitespace,
+combining characters and explicitly split surrogate pairs. Raw getter order is
+also checked with getters that synchronously change the next channel's value.
+Existing recovery, cancellation, manual-Retry and submission tests complement
+these checks; no browser or real runtime artifact is used.
+
+Benchmarks use Node.js v24.20.0, identical synthetic inputs, one warm-up per version
+and three alternating measured samples per version. Setup and final snapshots
+are excluded. Timing runs use uninstrumented scripts and the real clock; separate
+counter runs measure work and logical payload sizes. The measured arm call's
+only DOM-reading work is baseline capture; mutation callbacks are not included.
+All ten before/after benchmark attribution snapshots matched.
+
+| Fixture / getter model | Elements | Channel normalizations before -> after | Aggregate characters read (unchanged) | Normalization input characters before -> after | Median arm ms before -> after |
+| --- | --- | --- | --- | --- | --- |
+| Flat / cached | 10,000 | 30,000 -> 30,000 | 660,000 | 660,000 -> 660,000 | 24.074 -> 21.825 |
+| Deep / cached | 2,000 | 6,000 -> 6,003 | 134,065,000 | 134,065,000 -> 9,434,045 | 877.450 -> 98.870 |
+| Deep / cached | 4,000 | 12,000 -> 12,003 | 536,130,000 | 536,130,000 -> 19,034,045 | 4,049.565 -> 655.825 |
+| Deep / traversing | 2,000 | 6,000 -> 6,003 | 134,065,000 | 134,065,000 -> 9,434,045 | 871.795 -> 220.866 |
+| Deep / traversing | 4,000 | 12,000 -> 12,003 | 536,130,000 | 536,130,000 -> 19,034,045 | 2,981.474 -> 545.633 |
+| 1,000 historical cards / traversing | 2,000 | 6,000 -> 6,000 | 368,000 | 368,000 -> 368,000 | 16.219 -> 14.878 |
+| 500 nested messages / traversing | 2,500 | 7,500 -> 7,500 | 284,000 | 284,000 -> 284,000 | 15.338 -> 17.268 |
+| Independent labels / traversing | 1,000 | 3,000 -> 3,000 | 4,000,000 | 4,092,000 -> 4,092,000 | 10.871 -> 10.477 |
+| Overlapping ancestors / cached | 1,200 | 3,600 -> 3,600 | 13,465,800 | 13,465,800 -> 1,026,000 | 67.744 -> 8.587 |
+| Whitespace-heavy / cached | 2,000 | 6,000 -> 9,460 | 18,007,000 | 18,007,000 -> 25,987,960 | 52.730 -> 59.492 |
+
+Normalization counters above cover channel whitespace normalization, not later
+bounded failure-clause canonicalization. Unique elements and getter counts are
+unchanged in every fixture. Timing noise is substantial: cached deep-4,000 samples
+ranged from 3,488.735-5,106.979 ms before and 331.882-980.729 ms after. Small changes
+without work reduction do not establish a speedup. Nested messages and whitespace
+show negative benefit; inconclusive whitespace prefixes add work before fallback.
+The operation counts, not timing thresholds, are regression assertions.
+
+The deep-4,000 raw channel payload still peaks at 267,999 logical characters per
+element (about 523 KiB at two bytes per code unit). Its largest normalized string
+falls from 127,999 to 2,327 characters; the shortcut adds a short-lived prefix of
+at most 2,400 code units. These are payload estimates, not measured heap peaks:
+string sharing, regex buffers, arrays, GC and engine overhead are not quantified.
+No text is retained in a new traversal-wide cache. The traversing fixture still
+performs 16,004,000 subtree-node visits. Native DOM getter aggregation, browser
+style/layout cost and pathological whitespace processing remain limitations.
+
+Reproduce the opt-in benchmarks from the checkout root, with Node available:
+`python -B -c "import json; from tests.test_flow_baseline_normalization import benchmark; print(json.dumps(benchmark()))"`.
+Normal unit-test execution runs only correctness/work-count cases.
+
+No live Flow performance improvement is claimed. The existing post-Start 6-8-second
+main-thread long task is not established as fixed or caused by this pre-Start
+baseline work. No RPC, poll, navigation, Start, retry budget, cancellation,
+candidate/download ownership, state schema, privacy filter or diagnostic schema
+is changed. Final frozen-source verification results are recorded below.
+
+Final focused suite: 335 passed in 59.489 seconds. Complete offline suite: 1,234
+passed in 246.642 seconds. Both had zero failures, errors, skips, expected failures
+or unexpected successes, and all source/test SHA-256 snapshots stayed unchanged
+through each run. Preliminary runner invocation issues (fixture import path and
+namespace-package discovery) were corrected without production changes. The
+standalone four publication-security checks passed in 0.918 seconds, and the
+actual embedded observer begin/arm/read scripts passed Node syntax checks.
+Whitespace and production-scope AST checks passed. The existing engineering log
+before this section remains verbatim. Python compilation passed. Final staged
+security/whitespace review and fresh remote-ancestry checks gate the authorized
+single commit and normal push; their final SHA/publication status is reported
+separately.
