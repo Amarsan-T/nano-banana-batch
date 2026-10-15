@@ -1845,3 +1845,86 @@ warning is separate and was not changed. Final staging/privacy review and fresh
 remote checks gate the authorized single commit and normal push; publication
 and the resulting SHA are verified separately. Real Flow acceptance remains
 user-operated and pending for this fix.
+
+## Chrome background-switch verification without changing the launch policy
+
+At published commit `48a0676`, the developer reports real acceptance of two
+sequential Orders using Nano Banana 2.1, two valid 1376x768 JPEGs, and completed
+Resume skipping both generations and downloads. The command-line warning was
+present during both operations. These are the developer's observations, not
+Codex-inspected private artifacts; they do not establish background/minimized
+stability or acceptance of this subsequent correction. The developer authorized
+this narrow investigation, offline implementation/testing, commit and publication.
+Codex performed the source investigation and implementation below.
+
+The launcher already supplied the four required background switches. Its explicit
+omission of `--enable-automation` conflicts with the verifier's sole use of
+`Browser.getBrowserCommandLine`: Chromium returns a protocol error without that
+switch. Consequently the old recommendation to relaunch using the same launcher
+could not resolve that API restriction. Whether any switch is missing from the
+owner's actual running process has not been inspected or inferred here.
+
+Primary references inspected:
+
+- [Chromium Browser protocol definition](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/pdl/domains/Browser.pdl)
+  and [implementation](https://raw.githubusercontent.com/chromium/chromium/main/content/browser/devtools/protocol/browser_handler.cc).
+- [SystemInfo protocol](https://raw.githubusercontent.com/ChromeDevTools/devtools-protocol/master/pdl/domains/SystemInfo.pdl)
+  and [browser-target implementation](https://raw.githubusercontent.com/chromium/chromium/main/content/browser/devtools/protocol/system_info_handler.cc).
+- [Windows CommandLineToArgvW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-commandlinetoargvw)
+  and [Chromium command-line handling](https://raw.githubusercontent.com/chromium/chromium/main/base/command_line.cc).
+
+The existing primary read remains first. When unavailable on Windows, one temporary
+CDP session on the same connected browser target reads `SystemInfo.getInfo` and
+uses its actual `commandLine` field. Native Windows argument parsing handles quotes,
+spaces and Unicode; its allocation is freed. Only four booleans are retained, not
+raw arguments, profile paths, URLs, errors, GPU information or other system metadata.
+Failure diagnostics reuse this observation rather than repeating the fallback.
+Normal cleanup detaches that temporary session. KeyboardInterrupt and latched
+cancellation remain authoritative and skip new cleanup RPCs after cancellation.
+
+Missing switches still reject setup; unavailable, malformed or unsupported evidence
+remains unknown. The parser now rejects malformed argument lists, respects the
+switch terminator, exact feature-name case and replacement of earlier repeated
+feature-switch values. It cannot verify a flag merely embedded in another argument.
+The launcher and verifier share the required-switch constant; launch arguments,
+isolated profile, loopback address, model/settings, aspect-ratio correction,
+generation/retry accounting, download integrity and completed Resume are preserved.
+
+An existing endpoint is explicitly reported as reused: launching again does not
+apply new flags to that process. The unknown warning now explains the restricted
+primary method, the fallback and local `chrome://version` inspection. Its stable
+origin permits Python's default warning filter to deduplicate setup callers;
+explicit warning-filter overrides still work. Proven missing flags always raise.
+README and AGENTS describe manual close/relaunch only when switches are absent,
+using the same profile without deleting locks or authentication data.
+
+Regression-first evidence: the initial 18 offline checks failed with 13 failures
+and two errors, including the normal-launch fallback and duplicate-warning cases.
+A later switch-terminator regression was also demonstrated failing before its
+correction. The final focused module has 25 tests, including native Windows parsing,
+successful and unavailable reads, each missing switch, reused-process behavior,
+privacy-safe diagnostics, stale-evidence rejection and cancellation boundaries.
+No failing test was weakened or removed.
+
+The fallback is experimental and Windows-only; unsupported environments retain
+unknown status. Chromium may wait for GPU/system information before answering,
+so this setup RPC is not claimed to have a guaranteed wall-time bound. It is never
+added to generation polling. No command-line inspection proves effective renderer
+performance, background/minimized stability or endpoint/profile authenticity beyond
+the existing trusted-loopback assumption. Native-minimized production stays
+unsupported. No Chrome was launched, attached, closed or inspected during this
+work; no private checkout, profile, run state, canonical image or real Flow action
+was accessed. Final verification results follow below.
+
+Final verification: 25 new background-verification tests passed. The focused
+Flow/launcher/CLI, aspect-ratio, privacy, ambiguity and cancellation suite passed
+582 tests in 40.594 seconds. The complete offline suite passed 1,280 tests in
+1,758.464 seconds, with zero failures, errors, skips, expected failures or
+unexpected successes. Source/test SHA-256 snapshots remained unchanged through
+the full run. All four publication-security checks, Python compilation and five
+embedded JavaScript syntax checks passed. AST scope checks confirmed all 54
+embedded JavaScript fragments unchanged, including the published aspect-ratio
+and observer behavior. Git whitespace checks passed. Final staged privacy and
+remote-history checks gate the authorized single commit and normal push; the
+published SHA and clean working tree are verified separately. No live acceptance
+of this fallback is claimed.

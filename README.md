@@ -196,13 +196,43 @@ Do not attach to an everyday browser profile. Keep profile data, runtime state,
 prompts, assets, and raw diagnostic screenshots private; screenshots may show
 prompt/account information even when structured diagnostic text is filtered.
 
-The background switches keep timer work, occluded-window rendering, renderer
-process scheduling, and Windows native-occlusion calculation from reducing the
-dedicated Flow target. The dedicated launcher deliberately omits
-`--enable-automation`; loopback CDP remains enabled. If Chrome cannot expose its
-command line, required-switch status remains compatible but explicitly unknown. A
-process whose introspected command line provably lacks a required switch is still
-rejected with close/relaunch guidance. On attachment, the adapter enables page-scoped
+The background switches request disabled timer throttling, occluded-window and
+renderer backgrounding, and Windows native-occlusion calculation where Chrome
+supports them. The dedicated launcher deliberately omits
+`--enable-automation`; loopback CDP remains enabled. Chrome requires that switch for
+`Browser.getBrowserCommandLine`, so that method's refusal alone does not prove
+missing background flags. On Windows, attachment falls back to the same browser's
+browser-target `SystemInfo.getInfo` command-line field and parses it with native
+Windows quoting rules. Only the four flag-presence booleans are retained; raw
+arguments and unrelated system/GPU metadata are neither printed nor persisted.
+Failure diagnostics reuse those booleans without repeating the fallback. The
+experimental fallback can be unavailable or delayed while Chrome gathers system
+information; it is not part of generation polling. If both methods are unavailable,
+status remains explicitly unknown, with one warning under Python's default filter.
+An observed missing flag still stops setup. These checks establish startup-switch
+presence, not a guarantee about renderer performance or minimized operation.
+
+Use `run.bat` **Launch Chrome**, or `python app.py open-flow-debug`, with the same
+dedicated profile. An available endpoint is reused without relaunching Chrome or
+applying new launch flags. **No browser restart is needed solely for this verifier
+update** if that running browser already has all four switches. If automatic
+verification is unavailable, check locally as follows:
+
+1. In the dedicated Chrome, open `chrome://version` manually and compare its
+   **Command Line** with the four background flags listed above. Do not share the
+   full output: it can contain private paths or URLs. This manual inspection does
+   not change the application's automatic `unknown` status.
+2. If a switch is missing, pause any batch with Ctrl+C, then exit only the dedicated
+   Chrome using its normal UI, including other windows using that same profile.
+   Relaunch through **Launch Chrome** or `python app.py open-flow-debug` once that
+   process has exited. Reusing an existing process cannot repair its startup flags.
+3. Keep `.flow_chrome_profile` intact. Do not delete lock files, clear authentication,
+   create a replacement profile, terminate unrelated Chrome processes, or change
+   the debugging address. Saved runs still use their existing **Resume** workflow.
+
+Relaunch alone cannot guarantee introspection support. If the warning remains,
+retain the unknown status and the manual check; there is no verification override.
+On attachment, the adapter enables page-scoped
 CDP focus emulation and requests an active page lifecycle for the selected Flow tab;
 it does not call `bringToFront` or take Windows foreground focus. Foreground-visible
 and covered/unfocused restored operation each passed the
@@ -598,8 +628,12 @@ UUIDs, and committed assets remain available for download-only Resume.
   measured real Flow baseline cost. Callback-local text reuse reduces redundant
   mutation processing in synthetic tests; baseline aggregation cost remains.
 - **Acceptance:** current public-checkout behavior is offline-tested with synthetic
-  files and browser doubles. The Stage 2.1/2.2 corrections and Stage 3 ownership
-  boundaries have not received real Chrome/CDP/Flow acceptance. Earlier private
+  files and browser doubles. The developer reports a real two-Order sequential
+  acceptance at `48a0676`, using Nano Banana 2.1: two valid 1376x768 JPEGs and
+  Resume skipping both completed generations/downloads. Codex did not inspect
+  those private artifacts. That run predates the background-verification fallback
+  and does not establish background/minimized stability. The Stage 2.1/2.2 recovery
+  and Stage 3 ownership boundaries still require targeted real acceptance. Earlier private
   milestones do not establish current live UI compatibility or complete recovery
   acceptance, including post-generation Ctrl+C and edited-policy-prompt completion.
 
@@ -619,7 +653,7 @@ Historical evidence from the separate application described a rendered authentic
 
 Historical manual evidence favored installed Chrome for authentication; bundled Playwright Chromium was rejected during that earlier login attempt. This does not verify the current public checkout against live Flow. Authentication remains manual, with the adapter attaching to installed Chrome over local CDP.
 
-Candidate completion requires the configured count of new candidate UUIDs outside the pre-Start baseline, disappearance of current progress, and stability across result polls. Candidate source URLs, when retained, are sanitized informational metadata; selection and Resume use the persisted UUID. Earlier private reconnaissance observed UUID-owned `flow-image-tile` controls; current public-checkout UI compatibility remains unverified.
+Candidate completion requires the configured count of new candidate UUIDs outside the pre-Start baseline, disappearance of current progress, and stability across result polls. Candidate source URLs, when retained, are sanitized informational metadata; selection and Resume use the persisted UUID. Earlier private reconnaissance observed UUID-owned `flow-image-tile` controls; the limited developer-reported public acceptance above does not establish compatibility across all Flow layouts or recovery paths.
 
 ## Sample input
 
@@ -649,8 +683,10 @@ Accepted historical milestones include a 51-order Nano Banana 2 production run
 and a minimized-Chrome three-order run. Their runtime artifacts are private and
 excluded from this public copy. The acceptance results and operational
 constraints are recorded in `AGENTS.md`. The automatic maximized-window and
-project-per-batch hardening is offline-tested; its final bounded real two-prompt
-acceptance remains pending.
+project-per-batch hardening is offline-tested. The developer-reported two-Order
+acceptance above covers the ordinary sequential and completed-Resume path;
+window recovery, minimized/background stability and the new flag-verification
+fallback still require targeted real acceptance.
 
 ## License
 

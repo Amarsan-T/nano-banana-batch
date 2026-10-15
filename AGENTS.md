@@ -254,10 +254,16 @@ states without the binding keep exact original-prompt matching.
 Use installed Chrome, `.flow_chrome_profile`, loopback CDP at
 `127.0.0.1:9222`, and manual authentication.
 The dedicated Chrome deliberately omits `--enable-automation`; loopback CDP and
-the existing attach-over-CDP architecture remain enabled. Command-line
-introspection may be unavailable in this mode and is then diagnostic-only and
-nonfatal. If introspection succeeds and proves a required background flag absent,
-the adapter still fails closed.
+the existing attach-over-CDP architecture remain enabled. That omission prevents
+`Browser.getBrowserCommandLine` from returning arguments. Windows verification
+falls back to browser-target `SystemInfo.getInfo` and native Windows argument
+parsing; retain only four flag-presence booleans, never raw command lines or
+unrelated system metadata. If both methods are unavailable, status is explicitly
+unknown and nonfatal, with manual `chrome://version` guidance. A relaunch alone
+does not guarantee introspection support. Proven missing flags still fail closed.
+Existing debug Chrome is reused without changing its startup flags or profile;
+only the user may close and relaunch it when flags are missing. Verification
+does not prove minimized stability or actual rendering performance.
 Never store or print passwords, cookies, tokens, storage secrets, or account
 credentials; expose CDP beyond loopback; automate CAPTCHA/login; bypass security,
 quota, usage-limit, rate-limit, or access controls; or add stealth/evasion.

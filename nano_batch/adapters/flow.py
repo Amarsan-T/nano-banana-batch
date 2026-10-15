@@ -183,7 +183,7 @@ _REQUIRED_BACKGROUND_FLAGS = (
     "--disable-renderer-backgrounding",
     "--disable-features=CalculateNativeWinOcclusion",
 )
-_CALCULATE_NATIVE_WIN_OCCLUSION = "calculatenativewinocclusion"
+_CALCULATE_NATIVE_WIN_OCCLUSION = "CalculateNativeWinOcclusion"
 _TRACE_ALLOWED_HOSTS = {"flow.google.com", "flow-content.google"}
 _TRACE_EVENT_LIMIT = 250
 _PROJECT_UI_RECON_MAX_CANDIDATES = 50
@@ -3347,6 +3347,7 @@ class FlowSession:
         self.page = None
         self._required_background_flags_present: bool | None = None
         self._missing_background_flags: tuple[str, ...] = ()
+        self._background_flag_presence_observation: dict[str, bool] | None = None
         self._page_lifecycle_keepalive_applied: bool | str = "unsupported"
         self._generation_result_observation: dict[str, Any] | None = None
         self._candidate_correlation_failure_observation: dict[str, Any] | None = None
@@ -4070,28 +4071,30 @@ class FlowSession:
             f"--user-data-dir={self.profile_dir.resolve()}",
             f"--remote-debugging-port={self.debug_port}",
             f"--remote-debugging-address={self.debug_address}",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-renderer-backgrounding",
-            "--disable-features=CalculateNativeWinOcclusion",
+            *_REQUIRED_BACKGROUND_FLAGS,
             safe_destination,
         ]
 
     @staticmethod
     def _background_flag_presence(arguments: Any) -> dict[str, bool] | None:
         """Inspect only required stability switches, never retain raw arguments."""
-        if not isinstance(arguments, list):
+        if not isinstance(arguments, list) or not arguments or not all(
+            isinstance(argument, str) for argument in arguments
+        ):
             return None
-        flags = {str(argument).casefold() for argument in arguments}
+        switch_arguments = arguments[1:arguments.index("--") if "--" in arguments else None]
+        flags = {argument.casefold() for argument in switch_arguments}
         disabled_features: set[str] = set()
-        for argument in arguments:
-            value = str(argument)
-            if value.casefold().startswith("--disable-features="):
-                disabled_features.update(
-                    feature.strip().casefold()
-                    for feature in value.split("=", 1)[1].split(",")
+        for argument in switch_arguments:
+            name, _, value = argument.partition("=")
+            if name.casefold() == "--disable-features":
+                # Chromium switch values use the last occurrence; feature names
+                # are case-sensitive even on Windows.
+                disabled_features = {
+                    feature.strip()
+                    for feature in value.split(",")
                     if feature.strip()
-                )
+                }
         return {
             "disable_background_timer_throttling": (
                 "--disable-background-timer-throttling" in flags
@@ -4107,30 +4110,91 @@ class FlowSession:
             ),
         }
 
+    @classmethod
+    def _windows_background_flag_presence(cls, command_line: Any) -> dict[str, bool] | None:
+        """Parse transient browser evidence with Windows quoting, not substring matches."""
+        if os.name != "nt" or not isinstance(command_line, str) or not command_line.strip():
+            return None
+        if "\0" in command_line or len(command_line) > 32767:
+            return None
+        import ctypes
+        from ctypes import wintypes
+
+        parse = ctypes.WinDLL("shell32", use_last_error=True).CommandLineToArgvW
+        parse.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int)]
+        parse.restype = ctypes.POINTER(wintypes.LPWSTR)
+        release = ctypes.WinDLL("kernel32", use_last_error=True).LocalFree
+        release.argtypes, release.restype = [wintypes.HLOCAL], wintypes.HLOCAL
+        count = ctypes.c_int()
+        arguments = parse(command_line, ctypes.byref(count))
+        if not arguments:
+            return None
+        try:
+            return cls._background_flag_presence([arguments[index] for index in range(count.value)])
+        finally:
+            release(ctypes.cast(arguments, wintypes.HLOCAL))
+
+    def _read_live_background_flag_presence(self) -> dict[str, bool] | None:
+        """Read actual attached-browser arguments, discarding all but four booleans."""
+        cancellation_checkpoint("background_flag_verification")
+        try:
+            result = self._page_cdp_session.send("Browser.getBrowserCommandLine")
+            presence = self._background_flag_presence(
+                result.get("arguments") if isinstance(result, dict) else None
+            )
+        except Exception:
+            presence = None
+        cancellation_checkpoint("background_flag_verification")
+        if presence is not None or os.name != "nt" or self._browser is None:
+            return presence
+        browser_cdp = None
+        interrupted = False
+        try:
+            # SystemInfo requires the browser target, not the selected page target.
+            browser_cdp = self._browser.new_browser_cdp_session()
+            cancellation_checkpoint("background_flag_verification")
+            result = browser_cdp.send("SystemInfo.getInfo")
+            cancellation_checkpoint("background_flag_verification")
+            return self._windows_background_flag_presence(
+                result.get("commandLine") if isinstance(result, dict) else None
+            )
+        except KeyboardInterrupt:
+            interrupted = True
+            raise
+        except Exception:
+            cancellation_checkpoint("background_flag_verification")
+            return None
+        finally:
+            if browser_cdp is not None and not interrupted and not cancellation_requested():
+                try:
+                    browser_cdp.detach()
+                except Exception:
+                    pass
+
     def _verify_live_background_flags(self) -> None:
         """Reject only a live Chrome whose required switches are provably absent."""
         cdp = self._page_cdp_session
         self._required_background_flags_present = None
         self._missing_background_flags = ()
+        self._background_flag_presence_observation = None
         if cdp is None:
             return
-        try:
-            command_line = cdp.send("Browser.getBrowserCommandLine")
-            arguments = (
-                command_line.get("arguments")
-                if isinstance(command_line, dict)
-                else None
-            )
-            presence = self._background_flag_presence(arguments)
-        except Exception:
-            presence = None
+        presence = self._read_live_background_flag_presence()
+        self._background_flag_presence_observation = presence
         if presence is None:
             warnings.warn(
-                "Chrome did not expose its command line; required minimized/background "
-                "stability flags are unknown. Close and relaunch the dedicated Chrome "
-                "through the launcher for a verifiable session.",
+                "Chrome background stability flags are unknown: command-line introspection "
+                "is unavailable. Browser.getBrowserCommandLine requires --enable-automation, "
+                "deliberately omitted by this launcher; the browser-target SystemInfo "
+                "fallback was also unavailable or unsupported. Relaunch alone may not fix "
+                "introspection. Manually check Command Line at chrome://version in the "
+                "dedicated Chrome against the four README flags. If a flag is absent, "
+                "close only that Chrome and use Launch Chrome or `python app.py "
+                "open-flow-debug` with the same profile. Native-minimized operation "
+                "remains unsupported.",
                 RuntimeWarning,
-                stacklevel=2,
+                # A stable origin lets the standard filter deduplicate setup callers.
+                stacklevel=1,
             )
             return
         missing_keys = tuple(key for key, present in presence.items() if not present)
@@ -5384,9 +5448,9 @@ class FlowSession:
         if self._debug_endpoint_available():
             print(f"Chrome debugging is already available at {self.cdp_endpoint}.")
             print(
-                "Required minimized/background flags will be verified when a Flow "
-                "session attaches; status is reported as unknown if Chrome cannot "
-                "expose its command line."
+                "The existing Chrome process is reused; its launch flags are not changed. "
+                "Actual background flags will be verified on attachment. If introspection "
+                "is unavailable, see the README manual chrome://version check."
             )
             print("Run `python app.py inspect-flow` to inspect the existing Flow tab.")
             return
@@ -10056,9 +10120,11 @@ class FlowSession:
             except Exception:
                 pass
             try:
-                command_line = cdp.send("Browser.getBrowserCommandLine")
-                arguments = command_line.get("arguments") if isinstance(command_line, dict) else None
-                presence = self._background_flag_presence(arguments)
+                presence = self._background_flag_presence_observation
+                if presence is None:
+                    command_line = cdp.send("Browser.getBrowserCommandLine")
+                    arguments = command_line.get("arguments") if isinstance(command_line, dict) else None
+                    presence = self._background_flag_presence(arguments)
                 if presence is not None:
                     browser_observation["command_line_available"] = True
                     browser_observation["startup_flag_presence"] = presence
