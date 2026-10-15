@@ -552,7 +552,8 @@ UUIDs, and committed assets remain available for download-only Resume.
   private and do not expose its port externally.
 - **Latency:** the bounded historical-failure scan can aggregate large subtrees.
   Synthetic deep-DOM measurements were around three seconds; this is not a
-  measured real Flow baseline cost. No performance optimization was added here.
+  measured real Flow baseline cost. Callback-local text reuse reduces redundant
+  mutation processing in synthetic tests; baseline aggregation cost remains.
 - **Acceptance:** current public-checkout behavior is offline-tested with synthetic
   files and browser doubles. The Stage 2.1/2.2 corrections and Stage 3 ownership
   boundaries have not received real Chrome/CDP/Flow acceptance. Earlier private

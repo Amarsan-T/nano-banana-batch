@@ -1286,3 +1286,131 @@ and real Flow sessions were not accessed. Pre-publication checks verified the
 GitHub account `Amarsan-T` and unchanged remote baseline. The authorized single
 commit and normal push must still pass staged-content review and a fresh fetch
 without unexpected remote changes; their final SHA/status are reported separately.
+
+## Callback-local observer text reuse (2026-10-14)
+
+The developer reviewed the read-only performance investigation and authorized one
+correctness-first optimization, with one commit and normal publication only if
+equivalence, operation-count, regression, and privacy gates pass. Codex implemented
+the change in the sanitized public checkout at
+`37d9a0301a1722dd73f15893981183a0a9c055f9`. Earlier direct developer contributions
+and their historical attribution are preserved.
+
+Inspection of all callback paths found native DOM reads and observer bookkeeping,
+with no DOM text/attribute writes, event dispatch, application callbacks, awaits,
+or other yielding work. Under the existing standard DOM API contract, JavaScript
+runs this callback synchronously against the already-applied DOM mutations; other
+page script and mutation callbacks cannot interleave. Text arrays are consumed
+read-only. The optimization does not support side-effecting replacements of
+native DOM getters, nor establish untested live Flow behavior.
+
+Only the JavaScript installed by
+`_begin_current_generation_attempt_observation()` changes. `normalizedTexts()`
+reuses its already-filtered array, including its independent `ariaLabel` channel,
+from an element-keyed WeakMap during the active mutation callback. The callback
+creates a new map inside `try` and clears the closure reference in `finally`,
+including exceptional exits. It is null outside the callback and cannot be reused
+by baseline capture, polling, direct helper reads, later callbacks, re-arms, or
+replacement. Python cancellation adds no cleanup RPC: an already-running browser
+callback owns its map only until that callback exits or its realm is discarded.
+This does not promise immediate interruption or garbage collection.
+
+No visibility, geometry, mutation provenance, historical evidence, or
+classification decisions are cached. Record order, every record, all qualification
+steps, and existing evidence limits remain intact. Duplicate visibility reads
+remain for separate review. No RPC, poll, retry, navigation, Start action,
+diagnostic field/signal, persistent schema, candidate ownership, download, or
+filesystem behavior changes.
+
+Regression-first evidence: the initial 13-test module produced nine failing
+assertions/subtests in 14.091 seconds, with zero errors/skips, before production
+edits. The failures demonstrated repeated computation and missing callback-local
+reuse. The production correction then passed all 13 tests. Additional assertions
+strengthened coverage without removing the original performance assertions.
+
+The differential harness freezes the original normalization and callback blocks
+from the baseline above, keeping the other observer logic shared. Before edits,
+those blocks reproduced the complete installed script byte-for-byte. After edits,
+restoring them and removing the unused cache declaration again reproduces the
+original script exactly. Only that one Python method's embedded JavaScript changed.
+
+Fixtures compare failure/ambiguity outputs, historical signatures, per-element
+baselines, mutation sources, retained ordering, added-root and progress provenance,
+local resets, truncation and classification counters. They cover nested/overlapping
+records, historical/remounted/detached cards, identical wording, progress
+transitions, independent labels, visibility changes, all exact classes, unknown
+failure privacy, fresh polling and separate callbacks, normal replacement/cleanup,
+and exception cleanup. Existing suites also exercise submission/candidate
+ownership, explicit Retry, automatic budgets, cancellation, and persisted ambiguity.
+
+Paired benchmarks use Node.js v24.20.0, synthetic fixtures only, one warm-up per
+version and three measured samples per version in alternating order. Setup and
+Python/process transport are excluded. Timing runs use uninstrumented production
+blocks; separate counter runs instrument requests, actual computations, getter
+character totals, and temporary cache entries. Both versions must produce equal
+attribution snapshots. Counts below distinguish calls requesting normalized text
+(which remain unchanged) from computations avoided through reuse.
+
+| Fixture | Computations before -> after (unique elements) | Aggregate characters before -> after | Callback median ms before -> after |
+| --- | --- | --- | --- |
+| Flat insertion, 1,000 descendants | 3,002 -> 1,001 (1,001) | 67,264,998 -> 132,999 | 361.466 -> 4.444 |
+| Flat insertion, 2,000 descendants | 6,002 -> 2,001 (2,001) | 268,529,998 -> 265,999 | 1,305.035 -> 12.172 |
+| Deep insertion, 500 descendants | 6,447 -> 501 (501) | 109,502,641 -> 8,424,749 | 601.660 -> 64.686 |
+| Deep insertion, 500, overlapping records | 12,893 -> 501 (501) | 218,971,783 -> 8,424,749 | 1,487.685 -> 94.920 |
+| Deep insertion, 1,000 descendants | 12,947 -> 1,001 (1,001) | 436,774,391 -> 33,599,499 | 3,520.493 -> 333.726 |
+| 100 incremental records, 2,000-deep fixture | 1,200 -> 12 (12) | 131,400 -> 1,314 | 11.475 -> 8.675 |
+| 100 historical cards, debug off | 400 -> 201 (201) | 1,905,100 -> 55,299 | 19.076 -> 2.048 |
+| 100 current cards, debug off | 500 -> 201 (201) | 1,923,500 -> 55,299 | 23.469 -> 2.956 |
+| 100 historical cards, debug on | 400 -> 201 (201) | 1,905,100 -> 55,299 | 26.325 -> 2.590 |
+| 100 current cards, debug on | 500 -> 201 (201) | 1,923,500 -> 55,299 | 25.101 -> 2.606 |
+
+Cached aggregate strings are prepared outside the insertion measurements;
+incremental/card cases use iterative getters. This is a synthetic model, not
+Chromium's text/layout implementation. Timing noise remains: one current-card
+sample was 46.687 ms after optimization. Operation counts and equivalence, rather
+than speedup ratios, are the acceptance evidence. Style/geometry and selector work
+are unchanged. Historical cards produced no failures; current cards produced the
+same deduplicated exact failure as the reference.
+
+Temporary cache peaks were 2,001 entries / 62,000 logical stored string characters
+for flat 2,000, 501 / 22,459 for deep 500, 12 / 1,306 for incremental records, and
+201 / 18,400 for card cases. Each stored channel obeyed the existing 1,200-character
+filter. These totals are not heap-byte measurements; map/array overhead is
+additional. Cache size grows with elements visited in one callback, with no new
+arbitrary evidence cap. Every measured callback released its cache reference.
+
+There is no benefit where reuse is absent. Deep baseline capture retained 1,001
+computations and 33,599,499 aggregate characters in both versions
+(206.956 -> 209.434 ms); it allocated no callback cache. A single irrelevant
+attribute mutation retained two computations and 32 characters
+(0.022 -> 0.066 ms), with a two-entry cache and no hits. Deep distinct-ancestor
+aggregation, baseline cost, selector work, duplicate visibility reads, and
+large-callback temporary memory remain limitations. No browser/CDP wall time or
+live Flow speedup was measured. This does not identify or resolve the previously
+recorded 6-8-second Flow main-thread long task.
+
+The public test helper supports reproduction, for example from the repository
+root with Node available and tests on PYTHONPATH:
+
+`python -B -c "from tests.test_flow_observer_text_reuse import probe,bulk_fixture; print(probe(benchmark=True, **bulk_fixture(500,deep=True,overlap=True)))"`
+
+Final focused acknowledgement/attribution, retry, cancellation, diagnostics,
+privacy, and CLI suite: 336 passed in 76.185 seconds. Full offline suite: 1,155
+passed in 331.940 seconds. Both had zero failures, errors, or skips; the full run
+also had zero expected failures or unexpected successes, and source/test hashes
+remained unchanged throughout. Afterward, only documentation and one trailing
+blank line in the new test changed. That test's AST was verified identical, and
+the final 13 tests plus four publication-security checks passed together: 17 in
+15.700 seconds, zero failures, errors, or skips. No existing test was weakened.
+
+Python compilation and syntax checks for the three production observer scripts
+plus the uncached reference passed. Final whitespace and privacy checks include
+the new test file. README's latency note now acknowledges the callback-only
+optimization while preserving the baseline and real-Flow limitations. Earlier
+engineering-log text remains unchanged. Only public source and synthetic fixtures
+were used; no private original, runtime data, authenticated Chrome, or real Flow
+was accessed.
+
+Publication remains conditional on the final staged inventory/privacy review,
+unchanged remote baseline, and fast-forward ancestry. The authorized single commit
+and normal push are verified and reported separately with their final SHA.

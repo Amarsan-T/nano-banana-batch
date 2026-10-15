@@ -8512,7 +8512,12 @@ class FlowSession:
                 return style.visibility !== 'hidden' && style.display !== 'none' &&
                        rect.width > 0 && rect.height > 0;
               };
+              // Callback processing reads DOM text synchronously without mutating it.
+              // Reuse filtered text only in that callback, never baseline/poll reads.
+              let callbackTexts = null;
               const normalizedTexts = (element) => {
+                const cached = callbackTexts?.get(element);
+                if (cached) return cached;
                 const values = readTiming ? [
                   readStep('aria_label_read', () => element.getAttribute('aria-label')),
                   readStep('inner_text_read', () => element.innerText),
@@ -8533,6 +8538,7 @@ class FlowSession:
                     unique.push(text);
                   }
                 }
+                callbackTexts?.set(element, unique);
                 return unique;
               };
               const failurePattern = /(generation failed|could not generate|couldn't generate|failed to generate|error generating|you\s*(?:['’]\s*ve|have)\s+reached\s+your\s+usage\s+limit)/i;
@@ -8952,34 +8958,39 @@ class FlowSession:
               state.observer = new MutationObserver((records) => {
                 if (!state.active) return;
                 const callbackStarted = diagnosticEnabled ? performance.now() : null;
-                if (callbackStarted !== null && state.firstMutationAtMs === null) {
-                  state.firstMutationAtMs = callbackStarted;
-                }
-                state.mutationCount = Math.min(100000, state.mutationCount + records.length);
-                state.postStartFailureMutationCount = Math.min(
-                  100000, state.postStartFailureMutationCount + records.length
-                );
-                state.lastMutationAtMs = performance.now();
-                for (const record of records) {
-                  if (record.type === 'childList') {
-                    remember(record.target);
-                    for (const node of record.addedNodes) inspectAddedSubtree(node);
-                  } else if (record.type === 'characterData') {
-                    const changed = evidence([record.target.textContent || '']) !==
-                      evidence([record.oldValue || '']);
-                    remember(record.target.parentElement, changed);
-                  } else if (record.type === 'attributes') {
-                    const changed = record.attributeName === 'aria-label' &&
-                      evidence([record.target.getAttribute('aria-label') || '']) !==
-                      evidence([record.oldValue || '']);
-                    remember(record.target, changed);
+                try {
+                  callbackTexts = new WeakMap();
+                  if (callbackStarted !== null && state.firstMutationAtMs === null) {
+                    state.firstMutationAtMs = callbackStarted;
                   }
-                }
-                if (callbackStarted !== null) {
-                  const elapsed = Math.max(0, performance.now() - callbackStarted);
-                  state.callbackCount = Math.min(1000000000, state.callbackCount + 1);
-                  state.callbackTotalMs = Math.min(1000000000, state.callbackTotalMs + elapsed);
-                  state.callbackMaxMs = Math.max(state.callbackMaxMs, elapsed);
+                  state.mutationCount = Math.min(100000, state.mutationCount + records.length);
+                  state.postStartFailureMutationCount = Math.min(
+                    100000, state.postStartFailureMutationCount + records.length
+                  );
+                  state.lastMutationAtMs = performance.now();
+                  for (const record of records) {
+                    if (record.type === 'childList') {
+                      remember(record.target);
+                      for (const node of record.addedNodes) inspectAddedSubtree(node);
+                    } else if (record.type === 'characterData') {
+                      const changed = evidence([record.target.textContent || '']) !==
+                        evidence([record.oldValue || '']);
+                      remember(record.target.parentElement, changed);
+                    } else if (record.type === 'attributes') {
+                      const changed = record.attributeName === 'aria-label' &&
+                        evidence([record.target.getAttribute('aria-label') || '']) !==
+                        evidence([record.oldValue || '']);
+                      remember(record.target, changed);
+                    }
+                  }
+                  if (callbackStarted !== null) {
+                    const elapsed = Math.max(0, performance.now() - callbackStarted);
+                    state.callbackCount = Math.min(1000000000, state.callbackCount + 1);
+                    state.callbackTotalMs = Math.min(1000000000, state.callbackTotalMs + elapsed);
+                    state.callbackMaxMs = Math.max(state.callbackMaxMs, elapsed);
+                  }
+                } finally {
+                  callbackTexts = null;
                 }
               });
               state.observer.observe(document.body, {
