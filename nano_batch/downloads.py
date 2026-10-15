@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -183,20 +182,18 @@ def commit_staged_file(staged_path: Path, target_path: Path, *, overwrite: bool)
         raise FileExistsError(
             f"Refusing to overwrite existing candidate asset: {target_path}"
         ) from exc
-    except OSError:
-        pass
+    except OSError as exc:
+        if os.name != "nt":
+            raise OSError("No safe no-overwrite fallback is available on this platform.") from exc
 
-    created_target = False
-    try:
-        with staged_path.open("rb") as source, target_path.open("xb") as destination:
-            created_target = True
-            shutil.copyfileobj(source, destination)
-            destination.flush()
-            os.fsync(destination.fileno())
-    except Exception:
-        if created_target:
-            try:
-                target_path.unlink()
-            except FileNotFoundError:
-                pass
-        raise
+    # Callers validate ownership and content before installation. Reuse those
+    # complete staging bytes; never stream into the public canonical name.
+    if staged_path.stat().st_dev != target_path.parent.stat().st_dev:
+        raise OSError("No-overwrite staging publication requires the same volume.")
+    with staged_path.open("r+b") as source:
+        source.flush()
+        os.fsync(source.fileno())
+    # Windows rename refuses an existing destination and does not enable a
+    # cross-volume copy. Close the flush handle first; do not chmod or clean up
+    # either pathname on failure. Filesystem/power-loss guarantees remain local.
+    os.rename(staged_path, target_path)

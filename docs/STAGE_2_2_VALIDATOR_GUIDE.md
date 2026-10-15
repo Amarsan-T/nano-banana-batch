@@ -223,16 +223,23 @@ after the final check remains outside the single-writer guarantee.
 New project-owned downloads save the pending record before installation; failed
 completion saves preserve it and its staging directory. Records from legacy runs
 without project proof cannot reconcile automatically. Existing generic legacy
-adapters without UUID evidence retain their old download path and never gain
-automatic orphan adoption. States without records retain the existing guards.
+adapters without UUID evidence retain their legacy ownership/state rules and never
+gain automatic orphan adoption. Publication failures now retain their staging
+evidence too, without granting automatic reconciliation. States without records
+retain the existing guards.
 An active pending record cannot be bypassed with `--overwrite`; reconcile it first.
 Interrupted explicit replacements with conflicting old completion metadata fail
 closed under the same validator contract.
 
 The record binds expected content and logical ownership. It does not
 cryptographically prove which physical process installed identical bytes, prevent
-external filesystem changes after the last validation, or fix the separate
-copy-fallback atomicity defect. A partial canonical file left by that fallback
-remains protected even when valid staging survives; recovery never overwrites it.
+external filesystem changes after the last validation, or guarantee power-loss
+durability. The post-publication P2 installer removes direct-to-canonical copying:
+its Windows fallback flushes staging and uses same-volume, no-overwrite rename.
+Rename may consume the staging filename; existing canonical-only receipt recovery
+supports this without a schema change. Flush/access failures preserve the receipt;
+read-only historical staging is not chmodded to force fallback recovery. Partial
+canonical files left by the old fallback remain protected even when valid staging
+survives; recovery never overwrites them.
 Successful recovery may leave the old staging directory behind. It is not adopted
 or recursively removed after its receipt has been cleared.

@@ -1094,3 +1094,115 @@ log. Branch remains `main` at `56ca47d17872cb51f43000fc7f09191c4a1c9f27`, with
 seven existing commits and nothing staged. No private original/runtime data,
 authenticated profile, real Chrome/CDP/Flow session, or external API was accessed.
 No Git commit or push was made. Work stops for the final commit review.
+
+## P2 correction — remove direct-to-canonical copy fallback (2026-10-14)
+
+The developer accepted Codex's read-only design review and authorized this
+implementation, offline tests, and documentation, without a commit or push.
+Codex verified the clean public checkout on `main` at
+`173d4b2655aa3ef3d42ae0cd38dca0a5c2c2ea82`, with eight existing commits.
+The earlier developer-written validator and its engineering attribution remain
+unchanged; this section records Codex's implementation under the approved design.
+
+The design probe forced hard-link failure, interrupted the real fallback after
+50 bytes, and found a partial canonical file beside a valid 632-byte staging JPEG
+and durable pending receipt. Resume correctly refused the partial canonical
+without state writes. Exclusive canonical creation prevented overwrites but did
+not prevent partial visibility; `KeyboardInterrupt` bypassed `except Exception`,
+and process termination cannot rely on Python cleanup at all.
+
+Before production edits, three new desired-behavior regressions failed in 1.357
+seconds (three failures, zero errors/skips): no partial canonical on interruption,
+flush/closed-handle/rename ordering, and rejection of unsafe non-Windows fallback.
+Their assertions were retained. The initial 15-test implementation suite passed
+in 5.506 seconds after the installer correction. An expanded fixture run had one
+setup error because it attempted to remove existing project ownership; the fixture
+was corrected to create a separate synthetic legacy run, preserving that guard.
+The subsequent 196-test focused suite passed in 48.119 seconds.
+
+`commit_staged_file()` preserves successful hard-link installation and the existing
+explicit-overwrite branch. Its fallback now requires Windows and matching source
+and destination-parent device IDs, opens the existing staging file with `r+b`
+without truncation, flushes/fsyncs it, closes that handle, then calls `os.rename()`.
+Windows CPython uses `MoveFileExW` without replacement or cross-volume-copy flags.
+The installer no longer opens canonical with `xb`, copies into it, or unlinks it
+after failure. Non-Windows hard-link failures and flush/publication failures
+propagate. No chmod, copy-enabled move, new retry loop, or new temporary file was
+introduced. The device comparison is a snapshot, not a filesystem lock.
+
+An additional integration probe found that existing legacy cleanup could erase
+staging after publication failed because those candidates have no receipt. A
+retained regression reproduced that gap (one failure, zero errors/skips, 0.318
+seconds). A transient flag around the existing installer call now retains staging
+when installation raises, including legacy candidates and latched cancellation.
+Success clears the flag before normal validation/finalization and cleanup. Legacy
+failed-state accounting and lack of automatic orphan-adoption rights are unchanged.
+This narrow addition changes only `execute_download_one()` in the runner. A full
+suite started before this extra regression was superseded; it does not validate
+the final snapshot. Fresh final verification is recorded below.
+
+Current focused coverage contains 22 new tests: 13 portable simulations and nine
+native Windows tests. Simulated rename uses exclusive creation only for disposable
+fixtures; it is explicitly not evidence of native atomicity. Native tests exercise
+hard-link success, forced-link-failure followed by real rename, complete ordinary
+finalization/cleanup, existing read-only browser-download compatibility, read-only
+pending refusal, shared-hardlink attribute protection, post-rename interruption
+and canonical-only recovery, late destination collision, and delete-sharing denial.
+Simulations cover flush/unsupported/cross-volume/unexpected errors, non-Windows
+rejection, explicit overwrite compatibility, durable receipts, legacy retention,
+and idempotent Resume without another download/attempt. Existing historical-partial
+and filename-only orphan guards remain unchanged and are included in verification.
+
+The fresh ordinary pipeline already normalizes verified single-link read-only
+staging before receipt/install, so that successful behavior remains intact.
+Historical read-only staging with unavailable hard linking now fails closed when
+the fallback cannot open a writable flush handle. Native tests preserve its
+bytes, attributes, receipt, and counters; restoring this disposable fixture's
+permissions permits recovery without a new download. The installer never changes
+permissions to obtain access, including on a shared hard link. Unknown providers,
+ACLs, and sharing restrictions may similarly prevent publication.
+
+The existing staging filename and receipt schema are reused. Rename may consume
+staging; the existing canonical-only receipt recovery handles interruption before
+candidate completion persistence, followed by unchanged Order finalization.
+Completion and pending-record removal still share one atomic state replacement.
+Global file claims, UUID identity, path confinement, expected content metadata,
+retry budgets, and cancellation guards are preserved. Old partial canonical files
+remain rejected and protected; this change grants no right to delete or overwrite
+them. Retained legacy staging lacks automatic reconciliation evidence.
+
+Rejected alternatives were direct copying/copy-enabled moves, check-then-replace
+or `os.replace()` for ordinary installation, cleanup-only exception handling,
+redundant destination-side temporary copies, and a broader transactional-filesystem
+design. README and the validator guide now describe the revised installation and
+permission limitations; historical log entries remain verbatim.
+
+This removes the application's direct-copy partial-canonical window. It does not
+prove universal namespace atomicity or power-loss durability across NTFS filters,
+cloud/network providers, FAT/exFAT/ReFS/SMB, or hardware caches. Native evidence was
+collected on the fixture's local Windows filesystem, with forced hard-link errors
+distinguished from real rename/permission behavior. Cross-volume failures are
+simulated; no other volume or private folder was accessed. Existing single-writer,
+TOCTOU, physical-writer ambiguity, and staging-leftover limitations remain. Real
+Chrome/Flow acceptance and actual power-loss tests were not performed.
+
+Final focused suite: 197 passed in 48.083 seconds, zero failures, errors, or skips,
+including all 22 new tests and existing ordinary/pending ownership, Resume,
+confinement, cleanup, cancellation, legacy, and P1 privacy regressions. The fresh
+complete offline suite passed 1,134 tests in 344.040 seconds, zero failures,
+errors, or skips. Production and new-test SHA-256 snapshots remained unchanged
+throughout that run. The earlier superseded run's snapshot guard rejected its
+result after the additional legacy regression changed the tested files; it is
+not counted as final verification.
+
+Four standalone publication-security checks, Python compilation, tracked/untracked
+UTF-8 and whitespace inspection, and `git diff --check` passed. All existing
+tracked tests and earlier engineering-log content are preserved. Only the two
+installer/caller functions above changed in production; no embedded JavaScript,
+browser adapter, ownership validator, state codec, or dependency changed.
+The final inventory is five tracked modifications and one new test file. No
+credentials, private runtime data, or generated assets are commit-eligible.
+Branch remains `main` at the verified eight-commit baseline, with nothing staged.
+Only the public checkout, attached instructions, and synthetic offline fixtures
+were used. The private original and real Chrome/CDP/Flow were not accessed; no
+commit, push, or publication was performed. Work stops for developer review.

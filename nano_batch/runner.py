@@ -1568,10 +1568,13 @@ def execute_download_one(
     store.save(state)
 
     last_completed_download = None
+    retain_failed_installation = False
     plan.asset_dir.mkdir(parents=True, exist_ok=True)
     with _download_staging_directory(
         plan.asset_dir, planned_dir=plan.staging_dir,
-        preserve=lambda: any(candidate.pending_download_commit is not None for candidate in state_item.candidates),
+        preserve=lambda: retain_failed_installation or any(
+            candidate.pending_download_commit is not None for candidate in state_item.candidates
+        ),
     ) as temp_dir:
         staging_dir = Path(temp_dir).resolve()
         if staging_dir != plan.staging_dir:
@@ -1670,6 +1673,9 @@ def execute_download_one(
                     state, state_item, candidate, run_dir, final_destination, staged_path,
                     allow_selected_output=candidate_plan.action == "overwrite",
                 )
+                # Legacy candidates lack a receipt; retain their staging too if
+                # publication raises or returns with cancellation latched.
+                retain_failed_installation = True
                 interruptible_call(
                     "download_atomic_commit",
                     "atomic_canonical_commit",
@@ -1681,6 +1687,7 @@ def execute_download_one(
                         and candidate_plan.existing_destination == final_destination
                     ),
                 )
+                retain_failed_installation = False
                 metadata = interruptible_call(
                     "download_file_validation",
                     "pillow_canonical_validation",

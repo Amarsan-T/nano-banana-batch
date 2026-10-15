@@ -450,7 +450,7 @@ verification is read-only and model names are informational.
 
 ## Generic sequential batch runner
 
-The existing `run` command remains state initialization/dry-run only. `run-batch` accepts any non-empty batch with unique positive contiguous Orders starting at 1, unique `visual_id` values, and non-empty prompts. Orders are validated and processed sequentially. External x1/x2 batches are supported; the sample config requests x2. Each Order delegates to `execute_one` and `execute_download_one`, retaining UUID matching, `1K Original size`, CDP correlation, image validation, canonical naming, and atomic JSON state replacement. File installation uses a no-overwrite hard link when available and a non-atomic exclusive-copy fallback; see the limitations below.
+The existing `run` command remains state initialization/dry-run only. `run-batch` accepts any non-empty batch with unique positive contiguous Orders starting at 1, unique `visual_id` values, and non-empty prompts. Orders are validated and processed sequentially. External x1/x2 batches are supported; the sample config requests x2. Each Order delegates to `execute_one` and `execute_download_one`, retaining UUID matching, `1K Original size`, CDP correlation, image validation, canonical naming, and atomic JSON state replacement. File installation prefers a no-overwrite hard link; its Windows fallback flushes complete staging bytes and uses same-volume, no-overwrite rename. Unsupported fallback operations fail closed; see the limitations below.
 
 Preview the persisted resume plan without creating a browser session or changing state:
 
@@ -521,11 +521,17 @@ UUIDs, and committed assets remain available for download-only Resume.
   Trusted ownership/content checks are evidence at their boundaries, not a proof
   of which physical process installed identical bytes.
 - **File installation:** JSON state uses flushed temporary files and atomic
-  replacement. No-overwrite file installation prefers a hard link. Its exclusive
-  copy fallback is non-atomic; interruption may leave a partial canonical file.
-  Recovery detects mismatching bytes and protects that file even when valid
-  staging remains, rather than overwriting it to force progress.
-- **Staging leftovers:** ownership rejection, cancellation, and interrupted pending commits may leave
+  replacement. No-overwrite file installation prefers a hard link. If that fails,
+  Windows fallback flushes an existing writable staging file, closes its handle,
+  and renames it within the same volume without replacement or copying. Flush,
+  sharing, unsupported-platform, and publication failures propagate; the installer
+  does not chmod or delete either path to force success. Read-only historical
+  staging can therefore block fallback recovery while its pending evidence remains
+  intact. Receipt-based recovery supports canonical-only files after rename.
+  This removes direct copying into canonical names, not all filesystem/provider or
+  power-loss uncertainty. Old partial canonical files remain protected and rejected
+  even when valid staging survives. Explicit overwrite retains its separate contract.
+- **Staging leftovers:** publication failure, ownership rejection, cancellation, and interrupted pending commits may leave
   staging files/directories. Successful receipt recovery does not recursively
   clean historical staging directories.
 - **Path confinement:** ordinary planning requires the literal `assets` child of
