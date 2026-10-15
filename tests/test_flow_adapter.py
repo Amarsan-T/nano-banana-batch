@@ -10361,6 +10361,8 @@ class FlowAdapterTests(unittest.TestCase):
                 ],
                 "iframes": [{"title": "tool", "name": "", "src": "https://frame.test/app?token=x"}],
                 "diagnosticText": ["Historical card: Nano Banana 2", "Aspect ratio 16:9"],
+                # The second mocked evaluation is the composer-scoped settings read.
+                "aspect_ratio_controls": ["16:9"],
             }
             page.click = MagicMock()
             page.fill = MagicMock()

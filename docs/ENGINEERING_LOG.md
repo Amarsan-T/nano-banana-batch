@@ -1784,3 +1784,64 @@ before this section remains verbatim. Python compilation passed. Final staged
 security/whitespace review and fresh remote-ancestry checks gate the authorized
 single commit and normal push; their final SHA/publication status is reported
 separately.
+
+## Image-mode aspect-ratio preflight scope correction
+
+The developer reported a live pre-Start failure while Image mode, 16:9, Nano
+Banana 2.1 and x1 were selected. The reported observations were `02:29` (the
+project title) and `crop_16_9` (a Material icon identifier). The developer
+authorized an offline correction, regression tests, one commit and normal
+publication. Codex investigated and implemented this correction; no browser,
+private checkout, real run, prompt submission or download was accessed.
+
+The parser already understood `crop_16_9` as 16:9. The defect was collecting
+aspect evidence from all visible page controls and diagnostic text, allowing a
+time-shaped project title to become a second ratio. A synthetic DOM executing
+the actual inspection scripts reproduced the exact reported error before the
+production change. The initial ten regressions had four errors, including that
+exact failure. This establishes the code mechanism without independently
+verifying the user's live DOM or environment.
+
+Preflight now obtains ratio tokens from the existing active-composer/Start
+ownership snapshot. Current settings controls must be connected, visible and
+enabled. Unselected choices, result tiles, dialogs, prompt contents and broad
+page ancestors cannot establish a setting. Independent visible text, accessible
+labels, referenced labels and nested visible icons remain evidence; conflicts
+still fail closed. No selected ratio is inferred from the configured value.
+Only bounded numeric ratio/icon tokens cross this new evidence boundary.
+
+The extra collection is opt-in for environment/preflight inspection, inside its
+existing composer evaluation. Ordinary composer reads in acknowledgement polls
+do not collect it. No additional RPC, setting click, model enforcement, Start,
+retry, navigation, cancellation or download action is introduced. The existing
+inspection mock was updated to supply the scoped evidence returned by its second
+mocked evaluation; its original assertions remain intact.
+
+Adversarial inspection additionally reproduced unsafe interpretations in the
+initial patch: instructional button text mentioning a ratio, an unselected
+menu button and an aggregate combobox containing only an unselected choice.
+The final correction rejects these and excludes controls wrapping choice lists;
+an explicitly selected nested option remains eligible. Synthetic DOM tests cover
+positive settings evidence, mismatched formats, duplicate representations,
+hidden and unselected controls, inaccessible/missing evidence, stale history,
+prompt exclusion and unchanged read-only behavior. Final verification results
+are recorded below after the completed correction. Earlier full runs were
+superseded by this hardening and are not the final frozen-snapshot evidence.
+
+Final verification: all 21 new DOM regressions passed. The focused Flow,
+composer, project/window, launcher/CLI, cancellation, ambiguity and privacy
+suite passed 557 tests in 43.791 seconds. The complete offline suite passed
+1,255 tests in 342.432 seconds, with zero failures, errors, skips, expected
+failures or unexpected successes. Source/test SHA-256 snapshots were unchanged
+through the final full run. These offline checks used Python 3.12.14 and
+Node.js v24.20.0; they do not establish live acceptance in the reported browser.
+
+All four publication-security checks, Python compilation, five embedded
+JavaScript syntax checks and Git whitespace checks passed. UTF-8 AST comparison
+confirmed changes only to the composer-resolution normalizer, composer reader
+and environment inspection. Existing observer, generation/retry, cancellation
+and download implementations remain unchanged. The Chrome background-flags
+warning is separate and was not changed. Final staging/privacy review and fresh
+remote checks gate the authorized single commit and normal push; publication
+and the resulting SHA are verified separately. Real Flow acceptance remains
+user-operated and pending for this fix.

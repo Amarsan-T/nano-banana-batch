@@ -1841,6 +1841,11 @@ def _normalize_composer_generation_resolution(raw: Any) -> dict[str, Any]:
         "failure_reason": failure_reason,
         "owned_control_label": owned_label or None,
         "prompt_populated": bool(source.get("prompt_populated")),
+        "aspect_ratio_controls": [
+            value for value in source.get("aspect_ratio_controls", [])
+            if isinstance(value, str)
+            and re.fullmatch(r"(?:crop_)?\d{1,3}[:_]\d{1,3}", value)
+        ][:40] if isinstance(source.get("aspect_ratio_controls"), list) else [],
         "candidates": candidates,
         "remount_observed": bool(source.get("remount_observed")),
         "settle_elapsed_ms": _safe_layout_count(
@@ -5454,12 +5459,14 @@ class FlowSession:
             return None, None, "Diagnostic screenshot capture timed out or failed."
 
     @_ack_profiled("_read_active_composer_generation_resolution")
-    def _read_active_composer_generation_resolution(self) -> dict[str, Any]:
+    def _read_active_composer_generation_resolution(
+        self, *, include_aspect_ratio: bool = False
+    ) -> dict[str, Any]:
         """Resolve Start only through the unique active prompt composer's structure."""
         page = self._require_page()
         raw = _ack_call("composer_page_evaluate", page.evaluate,
             r"""
-            () => {
+            ({includeAspectRatio = false} = {}) => {
               const limit = 30;
               const clean = (value) => String(value || '')
                 .replace(/\s+/g, ' ').trim().slice(0, 120);
@@ -5611,6 +5618,60 @@ class FlowSession:
               const structuralReady = failureReason === 'ready';
               const generationControlActionable = structuralReady &&
                 actionableOwned.length === 1 && acceptedOwned[0] === actionableOwned[0];
+              // Preflight only: a project title or historical card is not a setting.
+              // Reuse this snapshot's composer ownership, never a page-wide text match.
+              const aspectRatios = new Set();
+              let aspectOverflow = false;
+              if (includeAspectRatio && structuralReady && selected &&
+                  !['main', 'section', 'article'].includes(selected.node.tagName.toLowerCase()) &&
+                  clean(selected.node.getAttribute('role')).toLowerCase() !== 'main') {
+                const selectedState = (element) =>
+                  ['aria-selected', 'aria-pressed', 'aria-checked'].some((name) =>
+                    ['true', 'on'].includes(element.getAttribute(name))) ||
+                  ['checked', 'active', 'on'].includes(element.getAttribute('data-state'));
+                for (const element of selected.node.querySelectorAll(
+                  'button,[role="button"],[role="combobox"],[role="radio"],[role="option"],[role="menuitemradio"]'
+                )) {
+                  if (!visible(element) || !enabled(element) ||
+                      element === prompt || prompt.contains(element) ||
+                      element.contains(prompt) ||
+                      element.closest('flow-image-tile,[data-media-id],[role="dialog"]') ||
+                      element.querySelectorAll(
+                        '[role="menu"],[role="listbox"],[role="radio"],[role="option"],[role="menuitemradio"]'
+                      ).length > 0) continue;
+                  const role = clean(element.getAttribute('role')).toLowerCase();
+                  if (['radio', 'option', 'menuitemradio'].includes(role) &&
+                      !selectedState(element)) continue;
+                  if (element.closest('[role="menu"],[role="listbox"]') &&
+                      !selectedState(element)) continue;
+                  // Read independent channels, including visible Material icon ligatures.
+                  // Never fall back from empty innerText to hidden textContent.
+                  const channels = [element.innerText, element.getAttribute('aria-label'),
+                    element.getAttribute('title')];
+                  for (const id of (element.getAttribute('aria-labelledby') || '').split(/\s+/)) {
+                    const label = document.getElementById(id);
+                    if (label && visible(label)) channels.push(label.innerText);
+                  }
+                  for (const nested of element.querySelectorAll('span,label,[role="img"],[aria-label],[title]')) {
+                    if (visible(nested)) channels.push(nested.innerText,
+                      nested.getAttribute('aria-label'), nested.getAttribute('title'));
+                  }
+                  const aspectSetting = role === 'combobox' || selectedState(element) ||
+                    channels.some((channel) => /\baspect\s*ratio\b|\bcrop[_\s-]*\d+[_:]\d+\b/i.test(
+                      String(channel || '')));
+                  for (const channel of channels) {
+                    if (!aspectSetting && !/^\s*\d{1,3}\s*:\s*\d{1,3}\s*$/.test(
+                        String(channel || ''))) continue;
+                    for (const match of String(channel || '').matchAll(
+                      /\b(crop[_\s-]*(\d{1,3})[_:](\d{1,3})|(\d{1,3})\s*:\s*(\d{1,3}))\b/gi
+                    )) {
+                      if (!aspectOverflow) aspectRatios.add(match[2] ?
+                        `crop_${match[2]}_${match[3]}` : `${match[4]}:${match[5]}`);
+                      if (aspectRatios.size > 40) aspectOverflow = true;
+                    }
+                  }
+                }
+              }
               return {
                 schema: 'nano-banana-composer-generation/v1',
                 prompt_editor_count: promptEditors.length,
@@ -5637,10 +5698,12 @@ class FlowSession:
                 owned_control_label: structuralReady
                   ? controlLabel(acceptedOwned[0]) : null,
                 prompt_populated: Boolean(clean(promptValue)),
+                aspect_ratio_controls: aspectOverflow ? [] : [...aspectRatios],
                 candidates: candidateFacts,
               };
             }
-            """
+            """,
+            {"includeAspectRatio": include_aspect_ratio},
         )
         return _normalize_composer_generation_resolution(raw)
 
@@ -5824,7 +5887,7 @@ class FlowSession:
         )
         try:
             generation_resolution = (
-                self._read_active_composer_generation_resolution()
+                self._read_active_composer_generation_resolution(include_aspect_ratio=True)
             )
         except Exception:
             generation_resolution = _normalize_composer_generation_resolution(
@@ -5861,11 +5924,7 @@ class FlowSession:
         )
         models = _composer_model_labels(raw.get("composerModelControls") or [])
         model_text = models
-        aspects = tuple(
-            label
-            for label in (*labels, *diagnostic_text)
-            if re.search(r"aspect ratio|crop[_\s-]*\d+[_:]\d+|\b\d+:\d+\b", label, re.I)
-        )
+        aspects = tuple(generation_resolution["aspect_ratio_controls"])
         downloads = tuple(label for label in labels if re.search(r"download|save image", label, re.I))
         editables = tuple(
             {
