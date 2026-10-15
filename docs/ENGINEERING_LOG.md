@@ -1206,3 +1206,83 @@ Branch remains `main` at the verified eight-commit baseline, with nothing staged
 Only the public checkout, attached instructions, and synthetic offline fixtures
 were used. The private original and real Chrome/CDP/Flow were not accessed; no
 commit, push, or publication was performed. Work stops for developer review.
+
+## P3 correction — distinguish ambiguous failure diagnostics (2026-10-14)
+
+The developer authorized this diagnostic correction, regression-first offline
+verification, and one local commit/publication only after all safety checks pass.
+Codex verified the clean public checkout on `main` at
+`fee4be146f6d26be6a361334e48b15b1c4db61f5`, synchronized with the local
+`origin/main` tracking ref, and implemented this correction. Earlier direct
+developer contributions and their recorded attribution are unchanged.
+
+The defect was diagnostic, not a demonstrated retry-policy failure:
+`_wait_for_generation_start()` caught every `FlowAutomationError`, including
+`FlowFailureAttributionAmbiguous`, and unconditionally recorded `explicit_failure`
+with `exact_explicit_failure_detected=true`. The recorder consequently emitted an
+exact-failure timestamp even though the original ambiguity exception still stopped
+the attempt and required explicit Retry. Raw poll metadata could separately claim
+an exact failure when qualified items coexisted with an ambiguity flag.
+
+Before production edits, eight new tests produced six failing assertions/subtests
+in 1.927 seconds, zero errors/skips. These reproduced remounted historical-card
+mislabeling with debug off/on, persisted mislabeling, missing poll metadata, and
+mixed qualified/ambiguous evidence. Assertions were retained. All eight tests
+passed after correction in 4.528 seconds. Submission assertions use the existing
+adapter checkpoint and persisted failed-state fields; no state schema change was
+required.
+
+Only two adapter methods changed. The Python reader reuses the observer's existing
+ambiguity flag to suppress the raw poll's exact-failure Boolean. The ACK exception
+handler distinguishes the existing ambiguity subclass and records
+`ack_signal="failure_attribution_ambiguous"` with that Boolean false, then reraises
+the same exception. The existing recorder omits `explicit_failure_ms` naturally;
+no new marker, state field, observer pass, browser/CDP call, polling, navigation,
+submission, or retry was added. Successful ACKs and confirmed exact failures keep
+their prior labels. Qualified unknown current-attempt failures keep their existing
+explicit-failure diagnostic semantics and fixed privacy-safe error text; they are
+not promoted to a named failure classification or an automatic retry budget.
+
+Consumer review covered the recorder's bounded state trace/first-signal marks,
+snapshot and terminal formatters, generation-failure observation serialization,
+persisted Order errors/result details, and CLI diagnostic rendering. Repository
+consumers display/store the signal string without a closed enum or retry decision
+based on it. Keys, types, trace limits, and
+`nano-banana-post-start-ack-timing/v1` remain unchanged. This is an additional
+bounded signal value; external consumers that assumed a closed list must accept
+it. README documents this consequence and that terminal-ambiguity `ack_ms` marks
+the wait stopping, not proof of a successful submission acknowledgement.
+
+The eight regressions exercise the real observer scripts through the existing
+offline Node DOM harness where relevant, plus controlled mixed/lost-observation
+payloads. They cover exact known failures, privacy-filtered unknown failures,
+unchanged historical/stale cards, successful progress ACK, raw poll and timing
+trace consistency, persisted diagnostics/preview output, debug off/on, consumed
+submission accounting, blocked ordinary Resume, and explicit manual Retry without
+resetting project ownership or automatic budgets. Direct ACK cases verify the
+same single observer read and no downstream polls/actions after terminal failure.
+
+The embedded observer JavaScript is unchanged. Source inspection limits production
+edits to those two Python methods; observer provenance, failure classification,
+exactly-once Start, retry/accounting, and the P1 privacy sanitizer remain intact.
+All three observer scripts passed standalone Node syntax checks via stdin. Native
+browser behavior and current real Flow acceptance are not established by these
+synthetic tests; existing observer/ACK latency and filesystem limitations remain
+outside this diagnostic correction.
+
+Final focused acknowledgement/attribution, retry, cancellation, diagnostic,
+privacy, and CLI suite: 323 passed in 59.819 seconds, zero failures, errors, or
+skips. The complete offline suite passed 1,142 tests in 315.679 seconds, zero
+failures, errors, or skips. Production/new-test SHA-256 snapshots remained
+unchanged during the full run. Four standalone publication-security checks,
+Python compilation, relevant Node syntax checks, UTF-8/privacy review, and Git
+whitespace checks passed. No existing tracked test was edited or weakened.
+
+The reviewed inventory is the adapter, one new eight-test module, six README
+clarification lines, and this appended record. Earlier engineering history is
+preserved verbatim. Implementation/verification used public source and disposable
+synthetic fixtures; the private original, runtime assets, authenticated Chrome,
+and real Flow sessions were not accessed. Pre-publication checks verified the
+GitHub account `Amarsan-T` and unchanged remote baseline. The authorized single
+commit and normal push must still pass staged-content review and a fresh fetch
+without unexpected remote changes; their final SHA/status are reported separately.

@@ -241,6 +241,12 @@ baselines occur before the prompt-fill origin and therefore have negative offset
 They also include a privacy-safe `post_start_ack_timing` record whose origin is
 immediately before Start mouse-down. It records first-signal times, existing-poll
 stage durations, the exact acknowledgement signal, and a bounded state-change trace.
+Terminal attribution uncertainty uses `ack_signal="failure_attribution_ambiguous"`
+and `exact_explicit_failure_detected=false`, without an exact-failure timestamp.
+For this terminal outcome, `ack_ms` records when the wait stopped; it does not
+prove successful submission acknowledgement. The exception and manual Retry
+protection remain authoritative. Diagnostic keys/types and the v1 schema are
+unchanged; consumers must allow this additional signal string.
 Set top-level `"prestart_timing_debug": true` in `config.json` to print concise
 `PRE-START TIMING` and `POST-START ACK TIMING` summaries during an intentional
 production diagnostic; the default is `false`, so normal launcher output remains

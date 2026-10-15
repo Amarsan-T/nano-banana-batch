@@ -9237,6 +9237,7 @@ class FlowSession:
             if isinstance(diagnostics, dict)
             else None
         )
+        attribution_ambiguous = isinstance(raw, dict) and raw.get("failure_attribution_ambiguous") is True
         self._current_generation_failure_poll_observation = {
             "generation_dom_mutation_count": (
                 max(0, min(1_000_000, int(mutation_count)))
@@ -9244,9 +9245,9 @@ class FlowSession:
                 and not isinstance(mutation_count, bool)
                 else None
             ),
-            "exact_explicit_failure_detected": bool(items),
+            "exact_explicit_failure_detected": bool(items) and not attribution_ambiguous,
         }
-        if isinstance(raw, dict) and raw.get("failure_attribution_ambiguous") is True:
+        if attribution_ambiguous:
             raise FlowFailureAttributionAmbiguous()
         return tuple(
             dict.fromkeys(
@@ -9351,16 +9352,19 @@ class FlowSession:
             self._current_generation_failure_poll_observation = None
             try:
                 _ack_call("failure_observation", self._raise_for_current_generation_attempt_failure)
-            except FlowAutomationError:
+            except FlowAutomationError as exc:
+                attribution_ambiguous = isinstance(exc, FlowFailureAttributionAmbiguous)
                 failure_poll = self._current_generation_failure_poll_observation or {}
                 timing.stage_complete(
                     "explicit_failure_check",
                     generation_dom_mutation_count=failure_poll.get(
                         "generation_dom_mutation_count"
                     ),
-                    exact_explicit_failure_detected=True,
+                    exact_explicit_failure_detected=not attribution_ambiguous,
                 )
-                timing.acknowledge("explicit_failure")
+                timing.acknowledge(
+                    "failure_attribution_ambiguous" if attribution_ambiguous else "explicit_failure"
+                )
                 raise
             failure_poll = self._current_generation_failure_poll_observation or {}
             timing.stage_complete(
