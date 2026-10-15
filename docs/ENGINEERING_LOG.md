@@ -1532,3 +1532,126 @@ accessing the private original, runtime assets, authenticated Chrome or real Flo
 Publication is conditional on exact staged-content review and a fresh fetch with
 unchanged remote baseline and fast-forward ancestry. The single authorized commit
 and normal push are verified separately and reported with their final SHA/status.
+
+## Read-only staging inventory (2026-10-15)
+
+After the staging-lifecycle audit, the developer approved a metadata-first,
+strictly read-only inventory and explicitly deferred cleanup/deletion. Codex
+implemented the isolated inventory, thin CLI integration, synthetic regressions,
+and documentation under that direction. Earlier direct developer contributions,
+the collaboratively developed ownership validator, and historical provenance
+limitations remain unchanged. No existing download/recovery implementation was
+modified for this feature.
+
+`inspect-staging --run-dir <directory>` requires one explicit root. It neither
+discovers runs nor loads prompt files/configuration or initializes browser/API
+connections. Its JSON report uses report-local opaque IDs, bounded numeric
+Order/variant references, fixed status/issue vocabulary, and overlapping labels:
+A receipt reference; B potentially needed interruption evidence; C disputed or
+ambiguous evidence; D a metadata-supported file-identity relationship to a
+completed canonical record; E apparently orphaned with ownership unproven.
+There is no disposable/safe-to-delete category. Canonical presence is metadata
+only, and even matching file sizes cannot validate bytes. Independent Batch/source
+identity and image integrity remain responsibilities of normal Resume.
+
+This tool does not delete files. Results are not cleanup authorization.
+Apparently orphaned does not mean disposable. Recovery eligibility remains
+determined by normal Resume. The inventory never saves state, installs/adopts
+assets, invokes recovery, changes permissions or ownership, allocates staging,
+submits browser actions, or changes attempt/retry accounting. General-purpose
+JSON parsing does read embedded prompts into memory; it is not described as
+avoiding that read. No prompt, URL, original filename, absolute path, content
+hash, credential, raw exception, or serialized state is returned or rendered.
+Expected CLI argument failures and unexpected command failures have fixed safe
+messages, including the root parser's extra-argument failure path.
+
+Inspection caps state at 2 MiB and 2,048 Orders (two candidates/eight outputs per
+Order), the assets scan at 512 entries, staging at 64 directories/64 immediate
+entries each, canonical metadata at 256 references, and output owners at eight
+per entry. Root ancestry is bounded to 64 components. Truncation and skipped
+nested directories remain explicit; no arbitrary crawl, image decoding/hashing,
+or filename/content-based orphan adoption occurs. Missing/corrupt/oversized state
+does not prevent a bounded filesystem metadata report, but evidence stays
+uncertain. Exit 0 means a complete metadata inspection, not safe ownership or
+recoverability; exit 2 means invalid arguments or incomplete inspection.
+
+Windows uses read-only native handles, opens reparse points themselves for
+rejection, checks normalized final paths, and holds the validated directory
+ancestry without delete sharing. A native competing-actor regression exposed
+that attribute-only directory handles did not prevent rename. The test failed
+with changed fixture metadata; requesting directory-list access corrected that
+assumption and the original probe now passes without filesystem changes. The
+state handle is checked against the original metadata before reading, including
+Python 3.12's full volume serial and 128-bit file identity. Shared state files,
+unknown reparse points, UNC/device roots, mapped network drives, short-name/other ambiguous aliases,
+sharing denial, and unavailable required metadata fail closed. POSIX has a
+descriptor-relative no-follow backend; it was reviewed but not natively exercised
+in this Windows environment.
+
+Handles can briefly deny concurrent rename/deletion or state replacement; this
+command is intended for inactive runs. It does not establish inactivity, acquire
+a run-writer lock, prevent file-content changes, or provide a global atomic
+snapshot. Metadata rechecks identify observed changes but do not remove all TOCTOU
+or storage-provider uncertainty. Access timestamps may change through OS/provider
+behavior; program-directed state, asset bytes, permissions and attributes are
+unchanged. Real ACL configurations, cloud/network providers, other filesystems,
+and power-loss behavior are not certified by the local fixtures.
+
+Regression-first: before production implementation, the 37 initial tests failed
+42 assertions/subtests with zero errors/skips under native Windows execution.
+An initial restricted run also encountered seven fixture-setup errors from native
+filesystem restrictions; those are not counted as application defects. Four
+additional focused checks reproduced missing canonical-size warnings, malformed
+completed metadata, disappearing-entry status, and final canonical-disappearance
+reporting before their corrections. Further retained checks caught a missing
+completed-association flag and unsupported completed-format handling. No failing
+assertion was removed or weakened to obtain a green run.
+
+Final classifier review retained file claims from candidate metadata and Order
+outputs even without a pending receipt. Two failing regressions reproduced the
+initial false-orphan labels, then passed with explicit nonreceipt-claim ambiguity.
+A native Windows case-alias regression also failed before deduplication and
+reference-label correction. Observed noncanonical spelling is still rejected,
+without reporting the same directory twice or losing its saved receipt reference.
+Mapped network drives are rejected before directory opening. The documented CLI
+uses Python's `-B` option to avoid interpreter bytecode-cache writes as well.
+
+The inventory regression module contains 55 tests. Native Windows fixtures cover
+junctions, real hard links, read-only files, file IDs, and denied directory
+replacement. Unknown-reparse attributes, ACL/provider errors and concurrent
+metadata changes are injected simulations. File-symlink coverage uses the native
+operation where permitted and a separately identified metadata simulation when
+privileges are unavailable. Tests guard state/recovery/browser/network and
+low-level mutation entry points and compare all fixture state/media bytes,
+permissions, attributes and relevant metadata before/after inspection; OS-managed
+access times are excluded deliberately. Privacy canaries cover prompts, URLs,
+filenames, malformed records, argument errors and provider exceptions. The last
+standalone inventory run passed 55 tests in 3.398 seconds, zero failures/errors/skips.
+
+A preliminary focused run passed 371 tests in 164.405 seconds before the last
+four classifier/platform regressions and their corrections. It is not the final
+snapshot verification; the frozen final-source runs are recorded below.
+
+Final frozen-source focused suite: 375 passed in 166.678 seconds, including the
+55 inventory tests, path confinement, ordinary/pending ownership, receipt codec
+and recovery, Resume/finalization, cancellation/cleanup, CLI and four publication
+security checks. Complete offline suite: 1,222 passed in 231.828 seconds. Both had
+zero failures, errors, skips, expected failures or unexpected successes. The CLI,
+inventory module and new test module SHA-256 snapshots stayed unchanged through
+both runs. The earlier 371-test run is superseded as final evidence.
+
+Python compilation passed. An initial compilation attempt used an overly nested
+scratch cache prefix and hit Windows path-length errors; compilation succeeded
+using standard ignored cache locations without source changes. CLI help passed
+without browser/config initialization. A supplementary completed-candidate probe
+confirmed that its stored digest and private paths never enter JSON output. AST
+review found no mutation/generation/download calls in the inventory. Existing
+download, runner, state, model, observer, AGENTS and LICENSE files are unchanged;
+all pre-existing CLI functions other than the parser and dispatch setup are
+AST-identical. Previous engineering-log content remains unchanged.
+
+Final staged-content/privacy/whitespace review and a fresh fetch with unchanged
+remote baseline gate the single authorized commit and normal push. Their final
+SHA/publication status is reported separately. Only public source and disposable
+synthetic runs were used; no private original, real run, profile, image/prompt
+file, authenticated browser or Flow operation was accessed.

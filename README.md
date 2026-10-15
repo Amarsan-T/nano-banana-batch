@@ -327,6 +327,49 @@ Preview stays read-only; missing or conflicting evidence stops recovery. Old unt
 legacy runs without project evidence are never adopted automatically. This record
 binds expected content and logical ownership, not the identity of the physical writer.
 
+### Inspect leftover staging metadata offline
+
+Supply exactly one run directory; this command does not discover runs, load prompt
+files or private configuration, attach to Chrome, or contact Flow:
+
+```powershell
+& '.\.venv\Scripts\python.exe' -B .\app.py inspect-staging --run-dir '.\runs\example_batch'
+```
+
+The bounded JSON report uses opaque entry IDs and overlapping evidence labels:
+`A` pending-receipt reference, `B` potentially needed for interrupted recovery,
+`C` disputed or ambiguous evidence, `D` a file-identity association with completed
+canonical metadata, and `E` apparently orphaned without proven ownership. IDs are
+local to that report, not stable file identities. Missing, unreadable, inconsistent,
+changing, unsafe, and truncated evidence are reported separately.
+
+**This tool does not delete files. Results are not cleanup authorization.
+Apparently orphaned does not mean disposable. Recovery eligibility remains
+determined by normal Resume with its independent Batch inputs.** The inventory
+does not install, adopt, recover, repair, save state, change permissions, or consume
+attempts. It does not read media contents or verify image integrity; matching file
+sizes or hard-link metadata cannot replace normal recovery validation.
+
+State JSON parsing necessarily reads embedded prompts into memory. Output omits
+those fields, URLs, credentials, original filenames, absolute paths, hashes, and raw
+errors. Only necessary metadata references are retained during inspection. Defaults
+cap state at 2 MiB/2,048 Orders, enumeration at 512 asset entries, 64 staging
+directories with 64 immediate entries each, and 256 canonical metadata references.
+No nested-directory crawl is performed. Numeric limits and truncation appear in
+the report. Exit code `0` means inspection completed, including any reported
+conflicts; `2` means invalid arguments or incomplete/unavailable inspection.
+
+Use this offline while the run is inactive. The command does not prove writer
+inactivity. Windows guards hold directory-list handles without delete sharing;
+they can briefly prevent directory rename/deletion and state-file replacement.
+Insufficient permissions or unsupported providers fail closed. Symlinks, junctions,
+unknown reparse points, and ambiguous aliases are skipped/rejected; Windows UNC
+and device roots and mapped network drives are rejected. POSIX uses descriptor-relative no-follow access,
+but this release's native verification is Windows-only. No global filesystem
+snapshot, provider/power-loss guarantee, or protection after handles close is
+claimed. OS-managed access timestamps may change as a consequence of inspection.
+The documented `-B` option also prevents Python interpreter bytecode-cache writes.
+
 ### Trace one Download trigger
 
 `trace-download-trigger` is a diagnostic command for an existing candidate, separate from `download-one`. It is currently restricted to candidate `v01`. It does not submit a prompt, change generation/download state, validate or commit a canonical asset, or advance the download attempt count. The required activation choice selects exactly one conservative input path (`locator`, stable-center `mouse`, or accessible `keyboard`), and the confirmation flag authorizes exactly one candidate-specific Flow Download activation:

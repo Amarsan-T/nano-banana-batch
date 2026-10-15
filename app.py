@@ -115,6 +115,23 @@ def _generation_settings(
     return settings
 
 
+def cmd_inspect_staging(args: argparse.Namespace) -> int:
+    try:
+        from nano_batch.staging_inventory import inspect_staging
+
+        report = inspect_staging(Path(args.run_dir))
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return 0 if report["inspection_status"] == "complete" else 2
+    except Exception:
+        print("ERROR: Staging inventory unavailable; no recovery or cleanup was performed.", file=sys.stderr)
+        return 2
+
+
+def _staging_argument_error(_message: str) -> None:
+    print("ERROR: Invalid staging inventory arguments; use inspect-staging --help.", file=sys.stderr)
+    raise SystemExit(2)
+
+
 def cmd_inspect(args: argparse.Namespace) -> int:
     batch = load_batch(Path(args.batch))
     print(f"Batch ID: {batch.batch_id}")
@@ -1254,6 +1271,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    p = sub.add_parser("inspect-staging", help="Inspect one run's staging metadata offline without writes.")
+    p.add_argument("--run-dir", required=True, help="Explicit run directory; no run discovery is performed.")
+    p.set_defaults(func=cmd_inspect_staging)
+    p.error = _staging_argument_error
+
     p = sub.add_parser("inspect", help="Validate and inspect a batch file.")
     p.add_argument("batch")
     p.set_defaults(func=cmd_inspect)
@@ -1601,7 +1623,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    if sys.argv[1:2] == ["inspect-staging"]:
+        parser.error = _staging_argument_error
+    args = parser.parse_args()
     try:
         return int(args.func(args))
     except KeyboardInterrupt:
