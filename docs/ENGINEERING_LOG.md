@@ -1414,3 +1414,121 @@ was accessed.
 Publication remains conditional on the final staged inventory/privacy review,
 unchanged remote baseline, and fast-forward ancestry. The authorized single commit
 and normal push are verified and reported separately with their final SHA.
+
+## Remove duplicate observer visibility reads (2026-10-14)
+
+The developer authorized a separate, narrowly scoped visibility optimization after
+reviewing the callback-local text reuse work. Codex verified the sanitized public
+checkout on main at `ec335f29144736ad1c63fcfe3b8c5bc077aae7f2`, initially clean
+and matching its origin/main tracking reference, and implemented this correction.
+Earlier direct developer contributions and historical attribution are unchanged.
+
+Call-site inspection found only two production calls to `state.detectFailureIn()`:
+the debug and ordinary branches of `scanFailureContainers()`. Each follows the
+same element's successful visibility check in the same synchronous stack. Between
+that check and detection there are only a counter increment and optional numeric
+timing bookkeeping. There is no DOM write, event dispatch, application callback,
+await, or yielding operation. Under the existing standard native DOM API contract,
+other page script and mutation callbacks cannot interleave.
+
+The detection body is now a private `detectFailureIn(element, visibilityVerified)`
+helper. Only the scan passes true, immediately after its fresh visibility check.
+The existing `state.detectFailureIn(element)` entry point forwards no proof and
+always performs its own visibility check; extra caller arguments cannot bypass
+it. The helper still checks element type and connectivity, including the second
+connectivity check after scan visibility. Nothing stores visibility across polls,
+callbacks, attempts, replacement, or asynchronous boundaries.
+
+Visibility keeps its exact prior meaning: display is not none, visibility is not
+hidden, and both rectangle dimensions are positive. It does not test viewport
+intersection, occlusion, or hit-test ownership. Those existing observer semantics
+are preserved, without altering stricter actionability checks elsewhere.
+Historical attribution, independent label channels, all exact classifications,
+ambiguity and privacy protections remain unchanged. The preceding text cache,
+baseline capture, retry budgets, submission/candidate ownership, navigation,
+downloads, filesystem behavior, and state schemas are untouched.
+
+Before production edits, 12 new tests plus the updated slow-geometry regression
+ran 13 tests in 13.947 seconds, with four failing assertions/subtests and zero
+errors/skips. They reproduced 400 style/geometry reads for 200 visible containers
+and the old two-read diagnostic expectation. After implementation, all 33 new
+visibility/existing observer-read timing tests passed in 15.024 seconds. Additional
+zero-width/height coverage was added before the final verification runs.
+
+Differential fixtures restore the original visibility guard/calls from the
+baseline while retaining the same text-cache and attribution implementation.
+Restoration reproduces the entire original installed JavaScript exactly.
+Comparisons cover failure/ambiguity outputs, historical signatures, per-element
+baselines, mutation sources, retained order, added-root/progress provenance,
+counters, hidden/revealed/zero-geometry/detached/remounted elements, nested exact
+failures, incomplete and unknown messages, all exact classes, independent direct
+calls, re-arm, cleanup, replacement, and debug off/on. A synthetic rectangle
+getter that detaches its element verifies that the retained connectivity recheck
+still rejects it. No change relies on a new visibility cache.
+
+For 200 connected visible retained containers, both debug modes now perform 200
+style reads and 200 geometry reads, instead of 400 each. Hidden retained containers
+still perform 200 of each; detached containers perform zero. Independent calls for
+200 visible elements still perform 200 of each. Text computation, selectors,
+connectivity reads, qualification results and semantic counters match the reference.
+
+Diagnostic keys, limits and stage names are unchanged. The style_read,
+geometry_read and visibility_test stage call totals report the actual single
+check instead of two for visible containers. Inner failure_detect time no longer
+includes a duplicate visibility read; the scan's original check remains measured.
+The existing slow-geometry test therefore expects one charged read and 7,000
+synthetic browser-clock ms instead of two and 14,000. Its slow-stage dominance
+assertion remains intact. Those charged values are not real execution timings.
+
+Paired Node.js v24.20.0 measurements used five warm-up runs per version and ten
+measured runs per version, alternating order. Only the original poll or direct
+calls were timed, excluding DOM setup, fixture snapshot construction, Python
+transport and process startup. The existing harness's warm-up/sample loops were
+adjusted only in memory. Separate counter runs verified equivalent snapshots.
+
+| 200-container case | Style reads before -> after | Geometry reads before -> after | Median JS ms before -> after |
+| --- | --- | --- | --- |
+| Current visible, debug off | 400 -> 200 | 400 -> 200 | 2.211 -> 2.173 |
+| Historical visible, debug off | 400 -> 200 | 400 -> 200 | 0.688 -> 0.716 |
+| Current visible, debug on | 400 -> 200 | 400 -> 200 | 3.349 -> 3.247 |
+| Historical visible, debug on | 400 -> 200 | 400 -> 200 | 1.922 -> 1.511 |
+| Hidden historical, debug off | 200 -> 200 | 200 -> 200 | 0.027 -> 0.027 |
+| Hidden historical, debug on | 200 -> 200 | 200 -> 200 | 0.368 -> 0.396 |
+| Detached, debug off | 0 -> 0 | 0 -> 0 | 0.019 -> 0.019 |
+| Detached, debug on | 0 -> 0 | 0 -> 0 | 0.342 -> 0.230 |
+| Independent direct calls, debug off | 200 -> 200 | 200 -> 200 | 1.514 -> 1.621 |
+| Independent direct calls, debug on | 200 -> 200 | 200 -> 200 | 2.182 -> 2.312 |
+
+Empty polls made zero style/geometry reads in both versions: 0.003 -> 0.003 ms
+with debug off and 0.011 -> 0.012 ms with debug on. Timing ranges overlapped and
+some medians increased; the proven benefit is elimination of redundant API calls,
+not a reliable wall-clock speedup with cheap synthetic getters. No browser layout,
+CDP round trip, or live Flow performance was measured. This neither establishes
+fewer forced layouts nor explains or resolves the previously observed 6-8-second
+Flow main-thread task. Baseline/ancestor text aggregation and other existing
+latency limitations remain.
+
+The new offline helper supports a quick paired probe with the default one warm-up
+and three samples: `probe(benchmark=True, **cards_fixture())` from
+`tests.test_flow_observer_visibility`. The five/ten protocol above uses the same
+fixtures and production scripts with only those benchmark loop counts changed.
+
+Final focused observer/attribution, privacy/ambiguity, lifecycle/cancellation,
+retry, diagnostics and CLI suite: 348 passed in 97.552 seconds. Complete offline
+suite: 1,167 passed in 353.485 seconds. Both had zero failures, errors or skips;
+the full suite also had zero expected failures/unexpected successes. The adapter,
+new regression module and modified timing-test SHA-256 snapshots stayed unchanged
+throughout the full run. No source or test changes followed that verification.
+
+Four publication-security checks, Python compilation, syntax checks for all three
+production observer scripts plus the original-visibility reference, whitespace,
+full-diff and privacy review passed. The reviewed scope is the adapter, one new
+12-test module, two intended geometry-count/charged-clock assertion updates, and
+this appended log entry. Existing test assertions were otherwise preserved.
+README remains accurate and unchanged; previous engineering history is preserved
+byte-for-byte. Only public source and synthetic fixtures were used, without
+accessing the private original, runtime assets, authenticated Chrome or real Flow.
+
+Publication is conditional on exact staged-content review and a fresh fetch with
+unchanged remote baseline and fast-forward ancestry. The single authorized commit
+and normal push are verified separately and reported with their final SHA/status.

@@ -8799,8 +8799,9 @@ class FlowSession:
                   state.failureContainers.push(current);
                 }
               };
-              state.detectFailureIn = (element) => {
-                if (!(element instanceof Element) || !element.isConnected || !visible(element)) {
+              const detectFailureIn = (element, visibilityVerified = false) => {
+                if (!(element instanceof Element) || !element.isConnected ||
+                    (!visibilityVerified && !visible(element))) {
                   return false;
                 }
                 const channels = normalizedTexts(element);
@@ -8887,6 +8888,8 @@ class FlowSession:
                   return true;
                 });
               };
+              // Independent callers always verify their own current visibility.
+              state.detectFailureIn = (element) => detectFailureIn(element);
               const remember = (element, contentChanged = false) => {
                 if (!(element instanceof Element) || !element.isConnected) return;
                 state.trackFailureContainers(element, contentChanged);
@@ -8906,8 +8909,8 @@ class FlowSession:
                     currentCount++;
                     if (!visible(element)) continue;
                     visibleCount++;
-                    if (readTiming) readStep('failure_detect', () => state.detectFailureIn(element));
-                    else state.detectFailureIn(element);
+                    if (readTiming) readStep('failure_detect', () => detectFailureIn(element, true));
+                    else detectFailureIn(element, true);
                   } finally {
                     if (readTiming) readTiming.endContainer(container);
                   }

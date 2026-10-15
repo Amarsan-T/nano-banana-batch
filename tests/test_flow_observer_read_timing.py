@@ -138,8 +138,8 @@ console.log(JSON.stringify({result, error, calls, clockReads: measuredClockReads
 
     def test_slow_geometry_is_identified(self):
         raw = self.browser_read(stage="geometry_read")["result"]["diagnostics"]["observer_read_internal_timing"]
-        self.assertEqual(raw["stages"]["geometry_read"]["calls"], 2)
-        self.assertEqual(raw["total_browser_js_ms"], 14000)
+        self.assertEqual(raw["stages"]["geometry_read"]["calls"], 1)
+        self.assertEqual(raw["total_browser_js_ms"], 7000)
         self.assertEqual(self.recorder(raw).observer_read_snapshot()["slowest_reads"][0]["dominant_internal_stage"], "geometry_read")
 
     def test_slow_retained_scan_self_work_is_identified(self):
