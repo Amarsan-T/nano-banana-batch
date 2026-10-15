@@ -37,9 +37,10 @@ Chrome window through:
 - `Browser.getWindowForTarget`
 - `Browser.getWindowBounds`
 - `Browser.setWindowBounds`
-Minimized recovery may use `minimized -> normal -> maximized`; the final state
-must verify as maximized with a positive viewport. Each distinct detected
-unusable-window event may receive one bounded normalization. After restoration,
+Minimized recovery requests restoration, accepting `normal` or a direct return to
+`maximized`. An already maximized restoration skips redundant maximization; the
+final state must still verify as maximized with a positive viewport. Each distinct
+detected unusable-window event may receive one bounded normalization. After restoration,
 the adapter waits boundedly for the exact project, positive viewport, responsive
 Flow DOM, and relevant editor/result surface; Angular remount during that settle
 window is recoverable.
@@ -48,8 +49,12 @@ generation continues as the same acknowledged attempt with its original candidat
 baseline. Recovery never resubmits Start, creates or consumes a generation retry,
 resets correlation, rotates the project, or changes candidate identity. During
 download it settles and reacquires the same candidate UUID. Repeated manual
-minimizations may each be restored boundedly without bringing Chrome to the
-foreground.
+minimizations may each be restored boundedly without an explicit foreground request.
+The adapter sends no explicit foreground/focus request; native Chrome/Windows
+restoration can still affect focus. A stopped acknowledged generation without
+persisted candidate ownership and pre-Start provenance remains blocked. Retry is
+a new submission, not reconciliation; never infer ownership from project, counts,
+image appearance, or newest position, and never edit runtime state to adopt it.
 Never use `bringToFront`, OS focus APIs, OS mouse/keyboard window management, or
 coordinate-based window management. Ctrl+C—not minimizing Chrome—is the
 intentional pause mechanism.

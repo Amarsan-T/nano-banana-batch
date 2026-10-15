@@ -247,12 +247,17 @@ guarantee minimized compositor behavior.
 For active production, the selected dedicated Chrome window is now checked at
 project setup/resume, generation configuration and submission, and candidate
 download boundaries. CDP targets only the native window containing the selected
-Flow tab, transitions a minimized window through `normal` to `maximized` when
-needed, and verifies both `windowState=maximized` and positive viewport geometry.
-No `bringToFront`, OS input, or focus request is used, so Chrome can stay behind
-other applications. A low-frequency result-wait watchdog permits one such recovery
-while continuing the same submitted generation; it never presses Start again or
-resets candidate baselines. Native minimized and snapped half-screen layouts are
+Flow tab and requests restoration before maximization. Restoration may report
+`normal` or return directly to the previous `maximized` state; the latter avoids
+a redundant maximize request. Both paths still verify `windowState=maximized`,
+positive viewport geometry, the exact project, a ready Flow surface and preserved
+attempt-observer provenance before continuing an acknowledged generation.
+No `bringToFront`, OS input, or explicit focus request is used. Chrome may remain
+behind other applications; native Chrome/Windows restoration can still affect
+focus, which this application cannot guarantee to prevent. A low-frequency
+result-wait watchdog permits one bounded normalization per detected unusable-window
+event while continuing the same submitted generation; it never presses Start again
+or resets candidate baselines. Native minimized and snapped half-screen layouts are
 therefore historical evidence, not the supported active-batch workflow.
 
 Run real Flow production and acceptance commands manually from normal interactive
@@ -557,6 +562,32 @@ never create or rotate another one. A completed generation with a failed downloa
 therefore resumes the exact persisted candidate download without incrementing its
 generation attempt count, then advances to the next pending order after a successful
 canonical commit.
+
+### An acknowledged generation stopped before candidate persistence
+
+A successful in-process window recovery continues the same submitted attempt
+using its original pre-Start baseline and observer. It does not submit again.
+If generation is already persisted as completed with owned candidate UUIDs,
+normal Resume can download those exact candidates and skip valid existing assets.
+
+If execution instead stopped with generation failed/interrupted **before those
+candidate records were saved**, acknowledgement, a project UUID, candidate counts,
+or a newly visible image do not establish which image belongs to that Order.
+The pre-Start baseline and observer provenance were held in memory, not durably
+saved for restart reconciliation. The application keeps this case blocked; this
+window fix does not retrospectively repair it or add an image-import command.
+**Retry authorizes a new generation and may spend credits. Do not use Retry to
+recover an image that already exists.**
+
+Preserve the affected run and project. The user can manually save their identified
+image using Flow's UI to a separate private location outside the run directory.
+That preserves a copy only; it does not establish application ownership or
+finalize the Order. Do not edit run state, rename an image into canonical assets,
+or select a result by newest/last position. Automatic reconciliation would require
+independent, durable evidence binding the exact candidate UUID to the original
+attempt and its pre-Start exclusions, followed by the existing ownership and asset
+integrity checks. A UUID or image alone is insufficient. Without that evidence,
+leave the Order blocked and retain the manually saved image separately.
 
 ## Failure attribution, Retry, and cancellation
 

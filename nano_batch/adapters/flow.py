@@ -4358,6 +4358,7 @@ class FlowSession:
         expected_state: str,
         *,
         require_usable_viewport: bool,
+        allow_maximized_restore: bool = False,
     ) -> dict[str, Any]:
         cdp = self._page_cdp_session
         if cdp is None:
@@ -4391,7 +4392,12 @@ class FlowSession:
                 ),
                 "viewport": viewport,
             }
-            if last_snapshot["window_state"] == expected_state and (
+            state_matches = last_snapshot["window_state"] == expected_state or (
+                allow_maximized_restore
+                and expected_state == "normal"
+                and last_snapshot["window_state"] == "maximized"
+            )
+            if state_matches and (
                 not require_usable_viewport
                 or self._production_viewport_usable(last_snapshot["viewport"])
             ):
@@ -4744,15 +4750,22 @@ class FlowSession:
                     "Browser.setWindowBounds",
                     {"windowId": window_id, "bounds": {"windowState": "normal"}},
                 )
-                self._wait_for_production_window_state(
+                restored = self._wait_for_production_window_state(
                     window_id,
                     "normal",
                     require_usable_viewport=False,
+                    allow_maximized_restore=True,
                 )
-            cdp.send(
-                "Browser.setWindowBounds",
-                {"windowId": window_id, "bounds": {"windowState": "maximized"}},
-            )
+            else:
+                restored = before
+            # Restoring a minimized window can restore its previous maximized
+            # state directly. Do not require an intermediate normal state or
+            # repeat maximization, but always verify the final usable layout.
+            if restored["window_state"] != "maximized":
+                cdp.send(
+                    "Browser.setWindowBounds",
+                    {"windowId": window_id, "bounds": {"windowState": "maximized"}},
+                )
             after = self._wait_for_production_window_state(
                 window_id,
                 "maximized",
@@ -4798,10 +4811,19 @@ class FlowSession:
             self._record_window_recovery_event(event)
             if isinstance(exc, FlowFailureAttributionAmbiguous):
                 raise
+            recovery_guidance = (
+                "Start was already acknowledged. Retry would submit a new "
+                "generation; do not use Retry to recover an existing image. "
+                "Reconciliation requires persisted, attempt-bound candidate "
+                "ownership; see the README recovery guidance. "
+                if start_acknowledged
+                else "Close and relaunch it through Launch Chrome, then Resume "
+                "current prompts. "
+            )
             raise FlowAutomationError(
                 "PRODUCTION_WINDOW_NORMALIZATION_FAILED: the dedicated Flow Chrome "
-                "could not be put into a usable maximized desktop layout. Close and "
-                "relaunch it through Launch Chrome, then Resume current prompts. "
+                "could not be verified in a usable maximized desktop layout. "
+                f"{recovery_guidance}"
                 "recovery="
                 f"{json.dumps(event, sort_keys=True, separators=(',', ':'))}"
             ) from exc

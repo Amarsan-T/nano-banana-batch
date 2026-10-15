@@ -1928,3 +1928,65 @@ and observer behavior. Git whitespace checks passed. Final staged privacy and
 remote-history checks gate the authorized single commit and normal push; the
 published SHA and clean working tree are verified separately. No live acceptance
 of this fallback is claimed.
+
+## Direct maximized restoration and interrupted-generation ownership limits
+
+The developer reported an acknowledged single-prompt generation at `447680d`
+whose image appeared in Flow after minimizing Chrome. Window diagnostics reported
+minimized before, maximized after, failure at window normalization and zero settle
+time; local generation remained failed/interrupted. These are developer-reported
+observations. Codex did not inspect that run, its images, browser or private data.
+The developer authorized this offline correction, regression testing and publication.
+
+Codex reproduced a concrete verifier defect before modifying production logic:
+the restoration request returned directly to maximized, but the intermediate wait
+required exactly normal. The regression raised
+`Production window transition did not verify as normal; last_state=maximized`
+and reproduced the reported failure-stage/acknowledgement facts. This establishes
+the code defect and a mechanism consistent with the report; no fresh live
+inspection establishes every condition of that historical failure. Chromium's
+[Browser handler](https://raw.githubusercontent.com/chromium/chromium/main/chrome/browser/devtools/protocol/browser_handler.cc)
+delegates normal-state requests to native restoration; a request is not proof
+that an intermediate normal state will be observed.
+
+The correction explicitly allows maximized only as an alternative intermediate
+restoration result. It skips redundant maximization in that case, then always
+performs the existing strict final maximized/positive-viewport check and bounded
+project/DOM/observer settle. Genuine restoration failure, unusable viewport,
+wrong project and lost observer provenance remain terminal. Existing polling,
+timeouts, candidate discovery, generation submission, retry budgets, cancellation
+and downloads are unchanged. There are no new focus calls or arbitrary sleeps.
+Native restoration can still affect focus; minimized operation remains unsupported
+as a steady state, and real acceptance of this correction remains pending.
+
+Source/state review found no durable pre-Start baseline or attempt-bound candidate
+receipt for an acknowledged attempt that stopped before returning its generation
+result. Failure diagnostics contain counts and acknowledgement facts, not enough
+evidence to reconstruct candidate ownership. Codex therefore did not add an unsafe
+reconciliation command or modify the reported run. Such failed/running state stays
+blocked on ordinary Resume. Persisted completed generation with owned UUIDs retains
+download-only Resume. Window errors after acknowledgement now explain that Retry
+would create a new generation instead of advising ordinary Resume as a repair.
+README distinguishes these cases and describes separate user-operated image saving
+without automatic adoption or state editing. This does not retroactively recover
+the stopped Order and does not claim that an image or UUID alone proves ownership.
+
+New synthetic regressions cover direct and delayed restore, strict final geometry,
+normal/fullscreen/unknown failure cases, semantic project checks, preserved observer
+re-arming and lost provenance, same-attempt completion excluding remounted historical
+and run-owned UUIDs, and persisted no-resubmission/asset protection. Fixtures use
+temporary directories and mocks only. Verification results follow below.
+
+Final verification: all 14 new regressions passed. The focused window/project/
+runner suite passed 123 tests in 268.231 seconds; additional Flow acknowledgement,
+attribution, privacy, composer/settings, cancellation, launcher and CLI regressions
+passed 607 tests in 47.732 seconds. The complete offline suite passed 1,294 tests
+in 379.538 seconds with zero failures, errors, skips, expected failures or unexpected
+successes. SHA-256 snapshots of Python source/tests remained unchanged throughout
+that run. All four publication-security checks, Python compilation, five embedded
+JavaScript syntax checks and Git whitespace checks passed. AST comparison confirms
+only the two window-restoration helpers changed in production; all 54 embedded
+JavaScript fragments remain unchanged. Final staged privacy/inventory and fresh
+remote-history checks gate the single authorized commit and normal push; the
+resulting SHA and clean synchronized tree are verified separately. No private
+original, real run state, browser profile, image or live Flow operation was accessed.
