@@ -83,9 +83,10 @@ representable but insufficient for automatic reconciliation.
 - `canonical_extension_for_image_format()` returns `jpeg` for JPEG, `png` for PNG,
   and `webp` for WEBP.
 - `output_basename()` derives the filename from authoritative Order/visual/variant.
-- `deterministic_candidate_path()` resolves a direct child of the assets directory.
-  Add the independent trusted-run containment check: this existing helper alone
-  allows a resolved assets directory redirected outside the run.
+- `deterministic_candidate_path()` now requires the literal assets child of the
+  resolved run root and rejects redirected candidate names. The post-publication
+  P2 correction strengthened this helper; the independent pending path checks
+  below remain required as defense in depth.
 
 ## Suggested validation order
 
@@ -118,9 +119,11 @@ canonical `.jpeg` destination is legitimate.
 New record paths use forward-slash serialization. Canonical layout is exactly
 `assets/<derived filename>`. Staging layout is exactly
 `assets/.staging-<nonempty safe suffix>/v<variant padded to two digits>.download`.
-The suffix is recorded because `TemporaryDirectory` chooses it; it cannot be
-independently derived from the Order. Existing generated suffixes use lowercase
-letters, digits, and underscores; allowing hyphens also covers safe test names.
+The suffix is recorded because it cannot be independently derived from the Order.
+Historically `TemporaryDirectory` chose it; ordinary planning now chooses a UUID
+hex suffix before exclusive directory creation so staging paths can be validated
+before side effects. Older recorded suffixes remain supported: lowercase letters,
+digits, underscores, and hyphens are permitted.
 
 Reject absolute/drive-relative paths, backslash aliases, traversal components,
 wrong canonical names/extensions, wrong staging variants/layout, and overlapping

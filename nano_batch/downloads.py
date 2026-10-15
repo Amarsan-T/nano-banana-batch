@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,18 +46,64 @@ def canonical_extension_for_image_format(image_format: str) -> str:
         ) from exc
 
 
+def _resolve_download_path(path: Path) -> Path:
+    """Resolve existing ancestry strictly; permit only genuinely missing suffixes."""
+    missing = []
+    current = path
+    try:
+        while True:
+            try:
+                resolved = current.resolve(strict=True)
+                target = resolved.joinpath(*reversed(missing))
+                if path.resolve() != target:
+                    raise ValueError("Download path resolution is inconsistent.")
+                return target
+            except FileNotFoundError:
+                try:
+                    current.lstat()
+                except FileNotFoundError:
+                    if current == current.parent:
+                        raise ValueError("Download path has no resolvable filesystem root.")
+                    missing.append(current.name)
+                    current = current.parent
+                else:
+                    raise ValueError("Download path contains a dangling filesystem link.")
+    except (OSError, RuntimeError) as exc:
+        raise ValueError("Download path cannot be safely resolved.") from exc
+
+
+def run_asset_directory(run_dir: Path) -> Path:
+    """Require the literal assets child of the resolved, trusted run root."""
+    root = _resolve_download_path(run_dir)
+    assets = root / "assets"
+    if _resolve_download_path(assets) != assets:
+        raise ValueError("Run assets directory contains symlink/junction redirection.")
+    return assets
+
+
 def deterministic_candidate_path(run_dir: Path, filename: str) -> Path:
     """Return a traversal-safe, run-controlled candidate asset path."""
     if not filename or Path(filename).is_absolute() or Path(filename).name != filename:
         raise ValueError(f"Unsafe candidate filename: {filename!r}")
-    asset_dir = (run_dir / "assets").resolve()
-    target = (asset_dir / filename).resolve()
-    try:
-        target.relative_to(asset_dir)
-    except ValueError as exc:
-        raise ValueError("Candidate path escapes the run asset directory.") from exc
-    if target.parent != asset_dir:
-        raise ValueError("Candidate files must be direct children of the run asset directory.")
+    asset_dir = run_asset_directory(run_dir)
+    target = asset_dir / filename
+    if _resolve_download_path(target) != target:
+        raise ValueError("Candidate path escapes or redirects its deterministic asset location.")
+    return target
+
+
+def deterministic_staging_path(run_dir: Path, staging_dir: Path, variant: int) -> Path:
+    """Validate a planned staging destination before allocating its directory."""
+    asset_dir = run_asset_directory(run_dir)
+    if (
+        staging_dir.parent != asset_dir
+        or not re.fullmatch(r"\.staging-[a-z0-9_-]+", staging_dir.name)
+        or type(variant) is not int or variant <= 0
+    ):
+        raise ValueError("Staging path does not match its run-owned layout.")
+    target = staging_dir / f"v{variant:02d}.download"
+    if _resolve_download_path(staging_dir) != staging_dir or _resolve_download_path(target) != target:
+        raise ValueError("Staging path escapes or redirects its run-owned location.")
     return target
 
 

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
+import shutil
+import stat
 import tempfile
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
@@ -21,6 +25,8 @@ from .downloads import (
     canonical_extension_for_image_format,
     commit_staged_file,
     deterministic_candidate_path,
+    deterministic_staging_path,
+    run_asset_directory,
     validate_image_file,
 )
 from .errors import (
@@ -175,6 +181,7 @@ class DownloadPlan:
     item: RunItemState
     candidates: tuple[CandidateDownloadPlan, ...]
     asset_dir: Path
+    staging_dir: Path
 
 
 @dataclass(frozen=True)
@@ -895,6 +902,16 @@ def plan_download_one(
 ) -> DownloadPlan:
     """Build a read-only one-item plan and fail before any browser interaction."""
     state, state_item = _download_state_item(batch, run_dir, order)
+    asset_dir = run_asset_directory(run_dir)
+    staging_dir = asset_dir / (".staging-" + uuid.uuid4().hex)
+    try:
+        staging_dir.lstat()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise ValueError("Planned staging directory cannot be safely inspected.") from exc
+    else:
+        raise ValueError("Planned staging directory already exists; refusing reuse.")
     expected_variants = list(range(1, len(state_item.candidates) + 1))
     actual_variants = [candidate.variant for candidate in state_item.candidates]
     if actual_variants != expected_variants:
@@ -905,6 +922,7 @@ def plan_download_one(
     plans = []
     seen_destinations = set()
     for candidate in state_item.candidates:
+        planned_staged_path = deterministic_staging_path(run_dir, staging_dir, candidate.variant)
         suffix = Path(candidate.suggested_filename).suffix.lower().lstrip(".")
         if suffix not in {"png", "jpg", "jpeg", "webp"}:
             raise ValueError(
@@ -981,7 +999,7 @@ def plan_download_one(
             _assert_unique_download_ownership(state, state_item, candidate)
         if candidate.pending_download_commit is None:
             _assert_pending_download_file_claims(
-                state, candidate, run_dir, destination, None,
+                state, candidate, run_dir, destination, planned_staged_path,
                 allow_selected_output=action in {"skip_valid", "overwrite"},
             )
         plans.append(
@@ -997,7 +1015,8 @@ def plan_download_one(
         state=state,
         item=state_item,
         candidates=tuple(plans),
-        asset_dir=(run_dir / "assets").resolve(),
+        asset_dir=asset_dir,
+        staging_dir=staging_dir,
     )
 
 
@@ -1390,29 +1409,124 @@ def execute_repair_order_candidates(
 
 
 @contextmanager
-def _download_staging_directory(asset_dir: Path, *, preserve: Callable[[], bool] | None = None):
-    temporary = tempfile.TemporaryDirectory(prefix=".staging-", dir=asset_dir)
+def _download_staging_directory(
+    asset_dir: Path, *, planned_dir: Path | None = None,
+    preserve: Callable[[], bool] | None = None,
+):
+    temporary = None
+    if planned_dir is None:
+        # Retain the existing helper contract for unplanned local callers.
+        temporary = tempfile.TemporaryDirectory(prefix=".staging-", dir=asset_dir)
+        staging_dir = Path(temporary.name)
+        created = staging_dir.lstat()
+        identity = (created.st_dev, created.st_ino)
+        cleanup = lambda: _cleanup_download_staging(staging_dir, identity, legacy_cleanup=temporary.cleanup)
+    else:
+        # Production validates this name during read-only planning. Exclusive
+        # creation cannot reuse an existing directory or a link at that name.
+        if planned_dir.parent != asset_dir:
+            raise _DownloadFileOwnershipError("Planned staging directory has an unexpected parent.")
+        deterministic_staging_path(asset_dir.parent, planned_dir, 1)
+        staging_dir = planned_dir
+        staging_dir.mkdir(mode=0o700)
+        created = staging_dir.lstat()
+        identity = (created.st_dev, created.st_ino)
+        cleanup = lambda: _cleanup_download_staging(staging_dir, identity)
     ownership_rejected = False
     try:
-        yield temporary.name
+        yield str(staging_dir)
     except _DownloadFileOwnershipError:
         # A changed snapshot may now claim these bytes in another receipt.
         # Do not erase disputed evidence while rejecting stale ownership.
         ownership_rejected = True
         raise
     finally:
-        if ownership_rejected or cancellation_requested() or (preserve is not None and preserve()):
-            # Chrome may still be writing. Do not enter recursive filesystem
-            # cleanup during intentional unwind, including the GC finalizer.
+        # Explicit cleanup owns this lifecycle. A rejected/failed preflight must
+        # not be bypassed later by TemporaryDirectory's GC finalizer.
+        if temporary is not None:
             temporary._finalizer.detach()
+        if ownership_rejected or cancellation_requested() or (preserve is not None and preserve()):
+            pass
         else:
-            try:
-                interruptible_call(
-                    "download_cleanup", "staging_directory_cleanup", temporary.cleanup,
-                )
-            finally:
-                if cancellation_requested():
-                    temporary._finalizer.detach()
+            if staging_dir.resolve(strict=True) != staging_dir:
+                raise _DownloadFileOwnershipError("Staging directory redirected before cleanup.")
+            interruptible_call("download_cleanup", "staging_directory_cleanup", cleanup)
+
+
+def _staging_path_stat(path: Path, root: Path):
+    """Inspect a staging entry without accepting traversal or filesystem redirects."""
+    if not path.is_absolute() or ".." in path.parts:
+        raise _DownloadFileOwnershipError("Staging entry has an ambiguous path.")
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise _DownloadFileOwnershipError("Staging entry escapes its owned directory.") from exc
+    info = path.lstat()
+    if (
+        stat.S_ISLNK(info.st_mode)
+        or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+        or path.resolve(strict=True) != path
+    ):
+        raise _DownloadFileOwnershipError("Staging entry contains symlink/junction redirection.")
+    return info
+
+
+def _make_staged_file_writable(path: Path, staging_dir: Path) -> None:
+    """Clear Windows read-only only while the regular file is exclusively staged."""
+    info = _staging_path_stat(path, staging_dir)
+    if not stat.S_ISREG(info.st_mode):
+        raise _DownloadFileOwnershipError("Expected a regular staging file.")
+    if getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_READONLY", 0):
+        if info.st_nlink != 1:
+            raise _DownloadFileOwnershipError("Refusing to change attributes of a shared staging file.")
+        path.chmod(info.st_mode | stat.S_IWRITE)
+
+
+def _cleanup_download_staging(
+    staging_dir: Path, identity: tuple[int, int], *, legacy_cleanup: Callable[[], None] | None = None,
+) -> None:
+    """Use standard rmtree with a confined, single-file read-only retry."""
+    def check_root():
+        cancellation_checkpoint("download_cleanup")
+        info = _staging_path_stat(staging_dir, staging_dir)
+        if not stat.S_ISDIR(info.st_mode) or (info.st_dev, info.st_ino) != identity:
+            raise _DownloadFileOwnershipError("Owned staging directory was replaced before cleanup.")
+
+    def onerror(error):
+        raise error
+
+    check_root()
+    # Preflight with the standard walker; reject links before it can descend.
+    for directory, dirs, files in os.walk(staging_dir, followlinks=False, onerror=onerror):
+        check_root()
+        for name in dirs + files:
+            info = _staging_path_stat(Path(directory) / name, staging_dir)
+            if (
+                not stat.S_ISDIR(info.st_mode) and info.st_nlink != 1
+                and (legacy_cleanup is not None or
+                     getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_READONLY", 0))
+            ):
+                raise _DownloadFileOwnershipError("Staging permission repair cannot touch shared file ownership.")
+
+    if legacy_cleanup is not None:
+        check_root()
+        legacy_cleanup()  # Retain the proven unplanned TemporaryDirectory hook.
+        return
+
+    def retry_readonly_unlink(function, name, error):
+        check_root()
+        path = Path(name)
+        info = _staging_path_stat(path, staging_dir)
+        if (
+            not isinstance(error, PermissionError) or function is not os.unlink
+            or not getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_READONLY", 0)
+        ):
+            raise error
+        _make_staged_file_writable(path, staging_dir)
+        function(name)  # Exactly one retry; genuine deletion/ACL failures propagate.
+
+    check_root()
+    shutil.rmtree(staging_dir, onexc=retry_readonly_unlink)
 
 
 def execute_download_one(
@@ -1438,8 +1552,10 @@ def execute_download_one(
         return plan.state, plan.item
 
     for candidate_plan in pending:
+        deterministic_candidate_path(run_dir, candidate_plan.candidate.suggested_filename)
+        staged_path = deterministic_staging_path(run_dir, plan.staging_dir, candidate_plan.candidate.variant)
         _assert_current_download_file_claims(
-            state, state_item, candidate_plan.candidate, run_dir, candidate_plan.destination, None,
+            state, state_item, candidate_plan.candidate, run_dir, candidate_plan.destination, staged_path,
             allow_selected_output=candidate_plan.action == "overwrite",
         )
     state.version = max(state.version, 3)
@@ -1454,15 +1570,17 @@ def execute_download_one(
     last_completed_download = None
     plan.asset_dir.mkdir(parents=True, exist_ok=True)
     with _download_staging_directory(
-        plan.asset_dir,
+        plan.asset_dir, planned_dir=plan.staging_dir,
         preserve=lambda: any(candidate.pending_download_commit is not None for candidate in state_item.candidates),
     ) as temp_dir:
         staging_dir = Path(temp_dir).resolve()
+        if staging_dir != plan.staging_dir:
+            raise _DownloadFileOwnershipError("Allocated staging directory differs from the validated plan.")
         for candidate_plan in plan.candidates:
             candidate = candidate_plan.candidate
             if candidate_plan.action == "skip_valid":
                 continue
-            staged_path = (staging_dir / f"v{candidate.variant:02d}.download").resolve()
+            staged_path = deterministic_staging_path(run_dir, staging_dir, candidate.variant)
             _assert_current_download_file_claims(
                 state, state_item, candidate, run_dir, candidate_plan.destination, staged_path,
                 allow_selected_output=candidate_plan.action == "overwrite",
@@ -1521,6 +1639,9 @@ def execute_download_one(
                     state, state_item, candidate, run_dir, final_destination, staged_path,
                     allow_selected_output=candidate_plan.action == "overwrite",
                 )
+                # Normalize before a canonical hard link exists; cleanup must
+                # never chmod a staged hard link and alter the canonical asset.
+                _make_staged_file_writable(staged_path, staging_dir)
                 if has_uuid or state.flow_project_required:
                     pending_record = PendingDownloadCommit(
                         record_version=1, batch_id=state.batch_id,

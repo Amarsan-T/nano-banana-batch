@@ -528,11 +528,13 @@ UUIDs, and committed assets remain available for download-only Resume.
 - **Staging leftovers:** ownership rejection, cancellation, and interrupted pending commits may leave
   staging files/directories. Successful receipt recovery does not recursively
   clean historical staging directories.
-- **Redirected assets root:** the older ordinary path helper confines paths to the
-  resolved `assets` directory without proving that directory lies in the trusted
-  run root. Pending path checks reject symlink/junction redirection later, but
-  ordinary staging may already have started. Use trusted run directories with
-  unredirected `assets`; this separate limitation is not fixed in Stage 3.
+- **Path confinement:** ordinary planning requires the literal `assets` child of
+  the resolved run root and exact canonical/staging destinations. Detected redirects fail
+  before attempt accounting, state writes, staging allocation, or adapter calls.
+  A run-root alias may resolve to the trusted run; aliases of its assets and
+  candidate/staging paths are rejected. Synthetic Windows junction checks are
+  offline tests, not live Flow acceptance. Filesystem races after validation
+  remain subject to the limitation above.
 - **Browser trust:** attach only to the dedicated, manually authenticated local
   Chrome session. Loopback CDP is privileged; keep runtime data and screenshots
   private and do not expose its port externally.

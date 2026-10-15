@@ -924,3 +924,173 @@ Only the public checkout and synthetic offline fixtures were used. The private
 original, private runtime/profile data, real Chrome/CDP/Flow sessions, and external
 APIs were not accessed. No files were staged, no commit or push was made, and the
 published repository remains unchanged. This local correction stops for review.
+
+## Post-publication P2 correction — early assets confinement (2026-10-14)
+
+The developer authorized this narrow correction and offline regressions after
+reviewing the audit finding. Codex verified the public checkout clean on `main`
+at `56ca47d17872cb51f43000fc7f09191c4a1c9f27` and implemented the change under
+that direction. The P1 adapter/privacy patch, earlier developer-written validator,
+state codec, generation behavior, and previous Git history are unchanged.
+
+The existing pending-download contract defines the resolved run directory as the
+trusted root, with literal `assets/<canonical filename>` and
+`assets/.staging-<suffix>/v<variant>.download` locations. Resolving an alias of the
+run root is supported; redirects of assets, canonical names, and staging paths
+are not, including redirects to another location inside the run. Supported legacy
+ordinary downloads use that same assets layout without gaining automatic pending
+reconciliation when project evidence is absent.
+
+The original helper instead trusted the resolved assets directory as its own root.
+Before production edits, the new regression used the real local allocator/state
+writes and a synthetic adapter. It failed with `(download attempts, adapter calls)`
+equal to `(1, 1)` rather than `(0, 0)` in 0.207 seconds: rejection occurred after
+the demonstrated side effects. That regression and its assertions were retained.
+
+`downloads.py` now resolves existing ancestry strictly, permits genuinely missing
+suffixes, rejects dangling links/resolution errors/disagreement, and requires the
+exact assets, canonical, and staging locations. Ordinary planning validates all
+candidate extensions and staging destinations before mutation. Its transient plan
+chooses a UUID hex staging suffix without creating a directory; execution rechecks
+paths before accounting and creates that exact directory exclusively, with private
+POSIX permissions. An existing name is rejected without reuse or a recovery loop.
+The suffix remains compatible with the existing receipt layout and old receipts.
+
+The staging context manager preserves its original unplanned helper interface and
+cancellation tests. Production supplies the prevalidated name. Normal cleanup
+uses the existing cancellation wrapper; cancellation, pending receipts, and
+disputed ownership retain staging without a GC finalizer deleting it. No pending
+ownership/content check, global file-claim guard, canonical no-overwrite check, or
+atomic state/pending-completion boundary was removed. An existing simulated pending
+redirection regression exposed the need to compare whole-path and strict ancestor
+resolution; it passes unchanged with that conservative consistency check.
+
+An intermediate 203-test run on the earlier helper revision reported three
+existing staging-interface errors. The original unplanned interface and cleanup
+hooks were restored without editing those tests; all nine post-generation
+cancellation tests then passed. Final review also added a missing-file staging
+claim regression: it failed before the extra guard with allocation already
+entered (one failure, zero errors/skips, 0.270 seconds). Passing the planned
+staging destination to the existing global file-claim guard at planning and
+pre-accounting boundaries corrects this case without removing its later checks.
+
+The new synthetic tests cover ordinary project-owned and projectless legacy
+success, idempotent Resume, missing assets without planning writes, assets and
+canonical/staging escapes, alternate extensions, conflicting in-run aliases,
+supported run-root aliases, occupied staging names, dangling links, and resolution
+errors. Rejection checks protect state bytes and counters, UUID/ownership metadata,
+existing files and unrelated assets, and prohibit allocation/save/install/adapter
+calls. Native Windows junction creation was denied by the sandbox; the same safe
+fixture tests succeeded outside it, entirely within ignored public-checkout scratch
+directories. At least the assets-escape case explicitly requires and verifies an
+actual Windows junction. Portable resolution simulations remain distinct evidence;
+these checks do not establish every Windows reparse-point or file-symlink variant.
+
+README and the validator guide now describe the corrected boundary and planned
+staging suffix, while retaining filesystem-race, single-writer, non-atomic copy,
+staging-leftover, and live-acceptance limitations. Earlier historical log entries
+remain verbatim. Filesystem changes after validation remain possible; this is
+defense in depth, not handle-based confinement or a concurrent-writer transaction.
+
+The final focused confinement, ordinary ownership, pending ownership/recovery, and
+post-generation cancellation suite passed 99 tests in 28.587 seconds, zero
+failures/errors/skips. It includes 18 new confinement regressions. An earlier full
+1,095-test snapshot passed in 318.033 seconds; the additional early staging-claim
+case and final production guard require the fresh full-suite result recorded below.
+
+Final complete offline suite on the finished production/test changes: 1,096 passed
+in 318.292 seconds, zero failures, errors, or skips. This includes legacy/Resume,
+state persistence, pending receipts, ordinary global ownership, generation/retry,
+P1 privacy, cancellation, launcher/CLI, Node observer, and publication checks.
+Four standalone publication-security checks, `compileall app.py nano_batch tests`,
+tracked/untracked UTF-8 and whitespace checks, and `git diff --check` passed.
+AST inspection limits production function edits to the path helpers and ordinary
+planning/staging/execution functions; existing pending validators/installation
+checks and all old test files remain unchanged. No embedded JavaScript changed.
+
+The final inventory is two source files, one new 18-test module, README, the
+validator guide, and this appended log. Only the public checkout and synthetic
+scratch fixtures were used; launcher/browser behavior in tests was mocked. No
+private original, authenticated profile, actual production run, Chrome/CDP/Flow
+session, or external API was accessed. Nothing was staged, committed, or pushed.
+Branch remains `main` at the P1 commit above. Work stops for developer review.
+
+## P2 follow-up — Windows staging cleanup compatibility (2026-10-14)
+
+The final pre-commit review blocked the P2 commit after Codex reproduced a
+regression in the planned-directory cleanup it had introduced. A valid read-only
+JPEG could be committed with persisted candidate completion, but direct
+`shutil.rmtree()` raised `PermissionError` and prevented Order finalization. The
+earlier 1,096-test result remains evidence for that snapshot, not coverage of this
+missing case. No P2 commit was created. The developer then authorized this narrow
+cleanup correction, preserving the early confinement design and deferring the
+separate copy-fallback backlog. Earlier direct developer contributions and their
+attribution are unchanged.
+
+Before production changes for this follow-up, two new native Windows regressions
+failed (two failures, zero errors/skips, 0.545 seconds): standalone read-only JPEG
+cleanup and full ordinary-download finalization. The latter confirmed a valid
+canonical image and completed candidate while the Order download remained running.
+Both assertions were retained. They passed after correction in 0.762 seconds.
+
+Codex inspected the installed Python 3.12 `TemporaryDirectory` implementation. Its
+permission-error handler clears read-only permissions and retries deletion; bare
+`rmtree()` lacked that behavior. Blindly repairing a staged hard link after commit
+could also change the canonical file's attributes. The correction therefore clears
+Windows read-only on a verified regular, single-link staging file before pending
+receipt persistence and canonical installation. It changes no image bytes, saved
+integrity metadata, candidate identity, retry budget, or canonical commit strategy.
+
+Cleanup retains standard-library walking/deletion, rather than adding a recursive
+deletion framework. It checks the allocated directory's device/inode identity,
+exact resolved paths, and entries without following links; reparse points and
+unsafe shared-file permission repair fail closed. The planned-directory handler
+retries only a verified read-only regular-file unlink, once, after checking sole
+link ownership. Other permission/ACL errors and a failed retry propagate. No
+unconditional `ignore_errors` or catch-all suppression was added. The historical
+unplanned `TemporaryDirectory.cleanup()` hook is retained behind the preflight;
+shared files are rejected before that hook could repair their permissions.
+
+The temporary-directory GC finalizer is detached before explicit cleanup decisions,
+so it cannot bypass a refusal or erase cancelled, pending, or disputed evidence.
+Planned paths still validate before exclusive allocation; ordinary planning's
+zero-attempt/zero-adapter/no-state-write rejection remains intact. The existing
+pending validators, global claims, canonical no-overwrite/content checks, and
+state/pending-completion boundaries are preserved. No production module besides
+`runner.py` changed in this follow-up; the earlier P2 `downloads.py`, README, and
+validator-guide edits remain unchanged.
+
+The regression module now contains 34 tests: the original 18 confinement tests and
+16 cleanup/lifecycle additions. Coverage includes project-owned and legacy
+read-only success, idempotent Resume without another attempt, unchanged canonical
+attributes/bytes, cancellation and pending/disputed retention, replaced roots,
+nested native Windows junctions, real shared hard links, simulated file aliases,
+GC refusal protection, and bounded genuine deletion-error reporting. Read-only
+behavior, hard links, and directory junctions were exercised natively on Windows;
+file-alias and persistent ACL-error injections are simulations, not native ACL or
+file-symlink acceptance. All fixtures stay in ignored public-checkout scratch space.
+
+Final focused cleanup/confinement, ordinary and pending ownership/recovery,
+interrupted-commit and cancellation suite: 145 passed in 34.558 seconds, zero
+failures/errors/skips. Full-suite and final publication verification follow below.
+
+Directory identities and path/attribute checks are snapshots, not filesystem locks.
+Mutation after validation remains a TOCTOU limitation. Unknown/reparse-point or
+shared-file cases fail closed, and genuine cleanup failures may retain staging.
+Other filesystems/storage providers and real Flow acceptance are not established
+by these tests. The single-writer assumption and non-atomic copy-fallback limitation
+remain; that backlog was not changed.
+
+Final complete offline suite: 1,112 passed in 308.257 seconds, zero failures,
+errors, or skips. Four standalone publication-security checks, Python compilation,
+tracked/untracked UTF-8 and whitespace checks, and `git diff --check` passed.
+Production/test content hashes match the full-suite snapshot. Existing tracked
+tests, the P1 privacy patch, the developer's validator, state models/codecs, and
+earlier engineering history are preserved. No embedded JavaScript changed.
+
+The cumulative P2 inventory remains five tracked modifications and one untracked
+test file; this follow-up changes only runner, that test module, and this appended
+log. Branch remains `main` at `56ca47d17872cb51f43000fc7f09191c4a1c9f27`, with
+seven existing commits and nothing staged. No private original/runtime data,
+authenticated profile, real Chrome/CDP/Flow session, or external API was accessed.
+No Git commit or push was made. Work stops for the final commit review.
