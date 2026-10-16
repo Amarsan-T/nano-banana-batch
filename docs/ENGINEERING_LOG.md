@@ -2102,3 +2102,64 @@ remote ancestry verification and normal push verification gate publication of
 the three separate fixes. No private checkout, real run, profile, image, prompt,
 Chrome/Flow session or generation credit was accessed. User-operated real
 acceptance remains necessary before claiming larger-batch reliability.
+
+## User-operated live acceptance of f9e5020 (recorded 2026-10-16)
+
+The independent developer reported successful real Google Flow acceptance testing
+of commit `f9e502051214feba82f4d416ce9c2cc7938656b6` and asked Codex to record the
+results. The developer operated the live tests and JPEG checks; Codex prepared
+this documentation entry from their report. Codex did not access the named runs,
+prompt file, images, browser profile or authenticated Flow session, and did not
+independently inspect the private artifacts. The date above is the recording date,
+not an inferred execution timestamp. No prompt contents, account information,
+project/candidate UUIDs or personal absolute paths are included.
+
+Reported environment: Windows PowerShell, Python 3.12.10, Playwright 1.64.0 and
+Google Flow with Nano Banana 2.1 selected manually, Image mode, 16:9, x1 and
+1K Original size downloads.
+
+- **Previous completed batch, preview only:** a fresh preview on `f9e5020` of
+  `runs/acceptance_41bcb43_two_orders` reported two completed Orders, skipped both
+  generations and both downloads as valid, and reported no ownership/UUID
+  consistency errors. This observation is a preview of existing completion, not
+  another real generation/download execution.
+- **New three-Order live batch:** using `prompts_three_test.txt`, the developer ran
+  `runs/acceptance_f9e5020_three_orders_01`. Orders 1, 2 and 3 each generated and
+  downloaded successfully: Completed 3, Failed 0. No Chrome background-flag warning
+  was observed. Absence of that warning alone does not establish the flag
+  introspection method, actual background performance or minimized-window safety.
+- **JPEG integrity:** the developer's Pillow check found exactly three JPEGs.
+  All three fully decoded, passed JPEG format assertions and measured 1376x768.
+  This records the reported byte-format/decoding checks and dimensions; Codex did
+  not open or distribute the images.
+- **Real completed Resume:** the developer executed the same three-Order batch
+  again without `--preview`. All three generations reported `skipped_completed`
+  and all three downloads reported `skipped_valid`: Completed 3, Failed 0. No
+  duplicate generation or download was reported.
+
+This is bounded real acceptance evidence for ordinary sequential generation,
+download, JPEG decoding and completed-Order Resume on this release in the reported
+environment. It is distinct from the preceding 1,321-test offline verification;
+that suite was not rerun for this documentation-only record. Successful completed
+Resume does not exercise interruption reconciliation or failure recovery.
+
+Remaining limitations:
+
+- Fully minimized Chrome operation is unsupported. Active batches still require
+  the verified maximized desktop layout; Chrome may remain behind other apps.
+  This run does not establish minimized recovery or background performance.
+- An acknowledged generation interrupted before durable candidate ownership and
+  pre-Start provenance are available cannot automatically be reconciled. Do not
+  infer ownership from a visible result or use Retry as reconciliation; Retry
+  authorizes a new submission and may consume credits.
+- Historical failure attribution, Ctrl+C handling and certain crash/interruption
+  scenarios remain primarily offline-tested. This successful run did not exercise
+  those failure paths, filesystem races or power-loss behavior.
+- Larger batches on this release remain unverified. Earlier historical milestones
+  do not establish this release's larger-batch reliability or complete production
+  safety.
+
+Only this engineering log is changed by the acceptance-record task. No application
+source, runtime state, images, prompts or browser data are changed. The requested
+Git action is one local documentation commit; publication requires separate
+explicit approval.
