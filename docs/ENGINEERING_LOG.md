@@ -2247,3 +2247,54 @@ test names retained, only the affected original test changed, and exactly two
 tests added. Git confirms no application source changes relative to the preceding
 HEAD; earlier engineering-log entries remain unchanged. Only this test module and the
 appended engineering record are included in the local correction.
+
+## Intentional Ctrl+C protocol-future cleanup (2026-10-16)
+
+At published `a7b5cff`, the independent developer reported a user-operated single-
+Order Ctrl+C test: Python exited with `Interrupted.`, an unobserved Playwright
+`TargetClosedError` followed, and Flow later displayed the image while local
+generation remained interrupted and normal Resume was blocked. Those are the
+developer's observations; Codex did not inspect the real run, prompt, image or
+browser. Blocked Resume alone is not a defect when ownership is unproven.
+
+Codex traced the installed Playwright 1.64.0 source. A cancelled `asyncio.wait`
+does not cancel its member protocol future. Connection cleanup sets its shutdown
+`TargetClosedError` on outstanding protocol callbacks, and sync-context teardown
+can close the loop before queued callbacks observe that error. An offline probe
+using the actual installed `Connection` and `ProtocolCallback`, synthetic futures
+and no driver/browser reproduced `Future exception was never retrieved` before
+the fix and zero unobserved errors afterward. The user's short live trace does
+not identify the exact interrupted RPC; no claim about that method is inferred.
+
+The adapter now retains only the selected connection's registered protocol futures
+before intentional driver stop. After stop it observes a completed error only if
+it is the identical shutdown error owned by that connection and has Playwright's
+`TargetClosedError` identity. Pre-existing, same-named unrelated, unregistered and
+normal-disconnect errors remain visible. No global handler or general warning
+filter was added; task cancellation stays with Playwright, and no new browser RPC
+or dedicated-Chrome close was introduced. The guarded bridge reads existing
+Playwright registry and CPython Future fields; unknown layouts retain reporting
+rather than pretending cleanup succeeded.
+
+Pending-future and stop-failure regressions failed before correction. Nine final
+offline tests cover these cases, cancelled futures, error provenance, unrelated
+errors and missing registries. The combined new cleanup/checkpoint selection
+passed 22 tests in 2.552 seconds; broader and full-release results follow below.
+Codex performed this implementation/testing at the developer's request. No earlier
+authorship is reassigned, and no real runtime data or live Flow was accessed.
+
+Combined final working-tree verification for cleanup and the completion checkpoint:
+the focused selection passed 381 tests in 259.151 seconds, and the full offline
+suite passed 1,345 tests in 378.273 seconds, with zero failures, errors, skips,
+expected failures or unexpected successes. Source/test SHA-256 snapshots were
+unchanged during the full run. The selections overlap and are not additive.
+All four publication-security checks, `compileall app.py nano_batch tests`, three
+embedded observer JavaScript syntax checks and whitespace checks passed. An initial
+redirected compilation-cache location exceeded Windows path limits; rerunning with
+normal ignored caches passed. AST checks confined production changes to the scoped
+adapter cleanup/checkpoint methods and `execute_one`; CLI cancellation, models,
+state serialization, canonical installation and the developer-written pending
+ownership validator remain unchanged. The 22 added tests comprise nine cleanup
+and thirteen completion-checkpoint tests. Existing tests were not edited or
+weakened. The two corrections are prepared as separate commits, with publication
+gated on staged privacy/inventory checks and unchanged remote ancestry.

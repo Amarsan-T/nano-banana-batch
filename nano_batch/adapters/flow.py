@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -5368,6 +5369,38 @@ class FlowSession:
             cancellation_checkpoint("read_only_session_setup")
             raise
 
+    @staticmethod
+    def _interrupted_protocol_futures(playwright: Any) -> tuple[tuple[Any, asyncio.Future], ...]:
+        """Retain only futures belonging to this Playwright connection."""
+        implementation = getattr(playwright, "_impl_obj", None)
+        connection = getattr(implementation, "_connection", None)
+        callbacks = getattr(connection, "_callbacks", None)
+        if not isinstance(callbacks, dict):
+            return ()
+        return tuple(
+            (connection, callback.future) for callback in callbacks.values()
+            if isinstance(getattr(callback, "future", None), asyncio.Future)
+        )
+
+    @staticmethod
+    def _observe_interrupted_disconnect_errors(futures: tuple[tuple[Any, asyncio.Future], ...]) -> None:
+        # Playwright stops/cancels its own tasks. Their asyncio.wait protocol
+        # futures can still receive TargetClosedError just before its loop closes,
+        # so queued done callbacks are insufficient. Observe those errors locally.
+        for connection, future in futures:
+            if not future.done() or future.cancelled():
+                continue
+            # Inspect CPython's stored error before retrieving it: other errors
+            # must retain their original asyncio reporting. Unknown future
+            # implementations are left alone; no global error handler is changed.
+            error = getattr(future, "_exception", None)
+            if (
+                error is getattr(connection, "_closed_error", None)
+                and type(error).__name__ == "TargetClosedError"
+                and type(error).__module__ == "playwright._impl._errors"
+            ):
+                future.exception()
+
     def close(self, *, intentional_cancellation: bool = False) -> None:
         # Existing session detach/disconnect owns domain teardown at close.
         self._stop_generation_network_timing(skip_rpc=True)
@@ -5393,6 +5426,7 @@ class FlowSession:
                 # RPCs during unwind; stopping Playwright disconnects its driver
                 # and externally attached Chrome without closing that Chrome.
                 if playwright is not None:
+                    interrupted_futures = self._interrupted_protocol_futures(playwright)
                     try:
                         playwright.stop()
                     except BaseException as exc:
@@ -5403,6 +5437,8 @@ class FlowSession:
                                 "cancellation: %s",
                                 type(exc).__name__,
                             )
+                    finally:
+                        self._observe_interrupted_disconnect_errors(interrupted_futures)
                 return
             try:
                 if page_cdp_session is not None:

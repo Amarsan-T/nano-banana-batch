@@ -339,6 +339,13 @@ a second signal or dispatch another Start. Intentional Playwright teardown avoid
 new synchronous CDP/browser RPCs after cancellation and disconnects the driver
 without closing the dedicated Chrome. Interrupt diagnostics remain prompt-free and
 record only bounded phase/submission and cleanup/recovery facts.
+Intentional disconnect retains the selected Playwright connection's outstanding
+protocol futures and observes only errors identical to that connection's own
+shutdown `TargetClosedError`. Playwright remains responsible for task cancellation.
+This local completion handling adds no browser RPC or global exception filter;
+pre-existing, unrelated and unowned errors retain normal reporting. The guarded
+Playwright/CPython internal bridge is offline-probed with installed Playwright
+1.64.0; an unknown internal layout retains the original reporting behavior.
 Post-generation cancellation boundaries also preserve the first signal when a
 blocking call returns normally or translates it into a transport exception.
 After cancellation, menu/observer cleanup, history restoration, download-behavior

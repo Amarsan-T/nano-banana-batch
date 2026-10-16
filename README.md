@@ -655,6 +655,15 @@ Swallowed/translated interrupts and a late signal after the final batch save sti
 exit as cancellation. If completion was already saved, it stays completed and the
 next Resume validates/skips it; cancellation does not undo committed work.
 
+Intentional disconnect also observes abandoned protocol futures that receive the
+selected Playwright connection's own shutdown `TargetClosedError`. It does not
+hide pre-existing or unrelated errors, change the global asyncio error handler,
+or close the dedicated Chrome. Playwright owns task cancellation; this local
+future handling adds no browser calls. The guarded internal bridge was tested
+offline with installed Playwright 1.64.0 and synthetic futures, without starting
+a driver or browser. If the internal layout is unavailable, original error
+reporting remains; live Ctrl+C acceptance of this correction is still required.
+
 ## Operational limitations and verification status
 
 - **Single writer:** run one invocation per run directory. There is no lock or
