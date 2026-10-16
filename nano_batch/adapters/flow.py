@@ -8727,6 +8727,7 @@ class FlowSession:
                 failureContainers: [], failureContainerNodes: new WeakSet(),
                 failureContainerLimit: 200, failureContainerTruncated: false,
                 failureBaseline: new WeakMap(), historicalFailureEvidence: new Set(),
+                historicalCandidateIds: new Set(),
                 failureBaselineTruncated: false, failureAttributionAmbiguous: false,
                 failureMutationSources: new WeakMap(), progressOwners: new WeakSet(),
                 clearedFailureSurfaces: new WeakSet(),
@@ -8844,6 +8845,9 @@ class FlowSession:
                 (failurePattern.test(text) && !genericGenerationFailureClause.test(text)));
               const boundarySelector =
                 'flow-image-tile,article,[data-media-id],[role="alert"],[role="status"],[aria-live]';
+              const candidateIdentityKey = (value) =>
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || '')
+                  ? value.toLowerCase() : value;
               const localOwner = (element) => {
                 for (let current = element, depth = 0;
                      current && current !== document.body && depth < 12;
@@ -8865,17 +8869,23 @@ class FlowSession:
                 Number.isFinite(state.activatedAtMs) &&
                 state.failureBaseline instanceof WeakMap &&
                 state.historicalFailureEvidence instanceof Set &&
+                state.historicalCandidateIds instanceof Set &&
                 state.failureMutationSources instanceof WeakMap &&
                 state.progressOwners instanceof WeakSet &&
                 state.clearedFailureSurfaces instanceof WeakSet);
               state.captureFailureBaseline = () => {
                 state.failureBaseline = new WeakMap();
                 state.historicalFailureEvidence = new Set();
+                state.historicalCandidateIds = new Set();
                 state.failureBaselineTruncated = false;
                 const walker = document.createTreeWalker(document.body, 1);
                 let element, count = 0;
                 while ((element = walker.nextNode())) {
                   if (++count > 10000) { state.failureBaselineTruncated = true; break; }
+                  const mediaId = element.getAttribute('data-media-id');
+                  if (/^[A-Za-z0-9_-]{8,100}$/.test(mediaId || '')) {
+                    state.historicalCandidateIds.add(candidateIdentityKey(mediaId));
+                  }
                   const texts = normalizedTexts(element, true);
                   const signature = evidence(complete([texts.ariaLabel || ''])
                     ? [texts.ariaLabel] : texts);
@@ -8950,6 +8960,21 @@ class FlowSession:
                   state.failureContainers.push(current);
                 }
               };
+              const hasHistoricalCandidateOwner = (element) => {
+                for (let current = element; current && current !== document.body;
+                     current = current.parentElement) {
+                  if (state.historicalCandidateIds.has(candidateIdentityKey(current.getAttribute('data-media-id')))) {
+                    return true;
+                  }
+                  // Only the nearest actual tile can own descendant image IDs.
+                  // Never collect IDs from a shared history ancestor.
+                  if (current.matches('flow-image-tile')) {
+                    return [...current.querySelectorAll('[data-media-id]')].some((node) =>
+                      state.historicalCandidateIds.has(candidateIdentityKey(node.getAttribute('data-media-id'))));
+                  }
+                }
+                return false;
+              };
               const detectFailureIn = (element, visibilityVerified = false) => {
                 if (!(element instanceof Element) || !element.isConnected ||
                     (!visibilityVerified && !visible(element))) {
@@ -8968,13 +8993,15 @@ class FlowSession:
                 if (baseline === signature && !transitioned) return false;
                 const source = state.failureMutationSources.get(element);
                 const inheritedPartial = baseline && source !== element;
-                if (!transitioned && (inheritedPartial ||
+                if (hasHistoricalCandidateOwner(element) || (!transitioned && (inheritedPartial ||
                     (baseline === undefined && (state.failureBaselineTruncated ||
-                     state.historicalFailureEvidence.has(signature))))) {
+                     state.historicalFailureEvidence.has(signature)))))) {
                   // A remounted historical message and a new identical failure
                   // cannot be distinguished by fresh node identity alone. Nor can
                   // an ancestor combine old partial clauses with a new sibling's
                   // text and establish ownership by its tag/role alone.
+                  // A UUID known before Start also contradicts attribution, even
+                  // when its old tile gains novel failure text or fresh progress.
                   state.failureAttributionAmbiguous = true;
                   state.lastFailureDetectionReason = 'failure_attribution_ambiguous';
                   return false;
