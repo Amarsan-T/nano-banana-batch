@@ -135,6 +135,13 @@ change model, aspect ratio, variant count, or other generation settings.
 Start is an exactly-once action. Ambiguous acknowledgement fails closed and Start
 must never be submitted twice. Result observation remains tied to the current
 submitted attempt and its pre-Start candidate baseline.
+Once the complete result passes current-attempt correlation, the runner saves
+normal completed generation and candidate UUID records atomically before observer
+or session cleanup. Cleanup cancellation then preserves download-only Resume.
+Starting completion persistence never authorizes another Start or a failure retry;
+after an interrupted save, the last durable atomic state remains authoritative.
+Acknowledgement or partial candidate discovery alone does not qualify. No restart
+ownership is inferred from a saved baseline or from results appearing after exit.
 A coded pre-Start failure that proves Start was never activated is persisted as
 not submitted and remains normally resumable without consuming a generation
 retry. The exact legacy page-global duplicate-Start preflight failure receives the

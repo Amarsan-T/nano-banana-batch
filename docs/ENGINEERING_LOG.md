@@ -2298,3 +2298,58 @@ ownership validator remain unchanged. The 22 added tests comprise nine cleanup
 and thirteen completion-checkpoint tests. Existing tests were not edited or
 weakened. The two corrections are prepared as separate commits, with publication
 gated on staged privacy/inventory checks and unchanged remote ancestry.
+
+## Proven generation completion before cleanup (2026-10-16)
+
+The same developer-directed investigation found a narrower recoverable window:
+`wait_for_result` could finish exact current-attempt correlation, but observer and
+session cleanup still ran before `execute_one` durably saved the result. Ctrl+C
+during that cleanup could lose otherwise proven UUID ownership and leave the
+Order blocked. The first twelve new checkpoint tests reported eight failures,
+including subcases, before correction. This is distinct from an unfinished
+acknowledged attempt, for which no trustworthy result has yet been established.
+
+Codex added a scoped adapter completion callback. Only after normal result waiting
+has established completion does it hand the result to the runner's unchanged
+candidate-count/new-identity validation and existing atomic completion save.
+The ordinary returned-result path shares that same function and does not save
+completion twice. The callback is removed on normal or exceptional exit. No
+selectors, Start actions, polling, sleeps, project changes or retry budgets were
+added. Other adapters keep their existing returned-result path unless their class
+explicitly implements the checkpoint scope.
+
+Once completion persistence starts, exceptions must not rewrite a potentially
+successful save as failed/running or authorize another submission. The last
+atomic state is preserved: completed with owned UUIDs permits normal download-
+only Resume; an interrupted/failed save that left running state remains blocked.
+Existing same-session named-failure retries stop after a completion checkpoint
+has started. During implementation, two extra storage-error subcases caught a
+newly reachable diagnostic read after local save failure; that read was removed
+by excluding checkpoint failures from generation-UI failure diagnostics. Both
+subcases now pass without changing or weakening their expectations.
+
+Thirteen final checkpoint tests cover pre-Start rollback, ambiguous acknowledgement,
+post-ACK cancellation without UUIDs, later Flow completion without local proof,
+cleanup/driver-stop interruption, translated interrupts, failures before/after
+atomic replacement, historical ownership conflicts, retry protection and repeated
+download-only Resume. With the nine cleanup tests, all 22 additions passed; the
+combined 381-test focused and 1,345-test full results are recorded above. No source
+or test changes followed that full run; only documentation and commit separation
+were completed afterward. Models/state decoding and the developer-written pending
+ownership validator are unchanged, so no run-state version migration was needed.
+
+There is deliberately no automatic reconciliation of an unfinished acknowledged
+generation. A rendered pre-Start baseline, saved project or acknowledgement does
+not bind a later image to the original request after observer provenance is lost;
+virtualized history and unrelated candidates make post-restart differences
+insufficient. No authoritative server request-to-candidate mapping is established
+by the repository. Partial discovery and abrupt termination before the atomic
+completion save therefore remain blocked. Power loss, filesystem races and
+single-writer limitations are not solved by this checkpoint.
+
+The reported interrupted run was not inspected or modified, and no claim is made
+that it has sufficient durable evidence for recovery. This correction cannot
+reconstruct missing ownership retroactively. Preserve that run; explicit Retry
+is a new potentially paid submission, not adoption of the existing Flow image.
+Both corrections require user-operated live Ctrl+C acceptance after publication;
+Codex performed no live browser, generation or download operations.

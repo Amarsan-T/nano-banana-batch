@@ -580,6 +580,14 @@ using its original pre-Start baseline and observer. It does not submit again.
 If generation is already persisted as completed with owned candidate UUIDs,
 normal Resume can download those exact candidates and skip valid existing assets.
 
+The adapter now checkpoints a fully correlated, complete result through the
+runner's existing atomic completion save before observer/session cleanup. This
+closes the cleanup-interruption gap once that save succeeds. It saves the normal
+completed-generation/candidate records, with no new state schema or ownership
+heuristic. If interruption or a storage error prevents the save, the preceding
+durable state remains authoritative and may still require blocking Resume.
+This does not persist an unfinished attempt as a proven result.
+
 If execution instead stopped with generation failed/interrupted **before those
 candidate records were saved**, acknowledgement, a project UUID, candidate counts,
 or a newly visible image do not establish which image belongs to that Order.

@@ -3368,6 +3368,8 @@ class FlowSession:
         self._generation_network_observation: dict[str, Any] | None = None
         self._window_recovery_events: list[dict[str, Any]] = []
         self._candidate_history_recovery: dict[str, Any] | None = None
+        self._generation_result_checkpoint: Callable[[GenerationResult], None] | None = None
+        self._generation_checkpoint_started = False
         self._generation_interrupt_checkpoint: dict[str, Any] = {}
         self._reset_generation_interrupt_checkpoint()
 
@@ -5466,6 +5468,26 @@ class FlowSession:
             if intentional_cancellation:
                 asyncio_logger.removeFilter(teardown_filter)
                 mark_cleanup_completed(error=cleanup_error)
+
+    @contextmanager
+    def generation_completion_checkpoint(self, checkpoint: Callable[[GenerationResult], None]):
+        """Publish only a fully correlated result, before fallible UI cleanup."""
+        previous = self._generation_result_checkpoint
+        previously_started = self._generation_checkpoint_started
+
+        def persist(result: GenerationResult) -> None:
+            # Once persistence starts, cleanup/storage errors cannot authorize a
+            # different submission, whether the atomic save completed or not.
+            self._generation_checkpoint_started = True
+            checkpoint(result)
+
+        self._generation_result_checkpoint = persist
+        self._generation_checkpoint_started = False
+        try:
+            yield
+        finally:
+            self._generation_result_checkpoint = previous
+            self._generation_checkpoint_started = previously_started
 
     def __enter__(self) -> "FlowSession":
         return self.open()
@@ -18258,9 +18280,42 @@ class FlowSession:
                 baseline_candidate_ids=baseline_candidate_ids,
                 forbidden_candidate_ids=forbidden_candidate_ids,
             )
+            generation_recoveries = self._window_recovery_events[recovery_event_start:]
+            if generation_recoveries:
+                configuration = {
+                    **configuration,
+                    "window_recovery_events": generation_recoveries,
+                }
+            if isinstance(submission, dict) and isinstance(
+                submission.get("prestart_timing"), dict
+            ):
+                configuration = {
+                    **configuration,
+                    "prestart_timing": submission["prestart_timing"],
+                }
+            if isinstance(submission, dict) and isinstance(
+                submission.get("post_start_ack_timing"), dict
+            ):
+                saved_timing = submission["post_start_ack_timing"]
+                if self.prestart_timing_debug and self._post_start_ack_timing is not None:
+                    saved_timing = {
+                        **saved_timing,
+                        "observer_read_breakdown": self._post_start_ack_timing.observer_read_snapshot(),
+                    }
+                configuration = {
+                    **configuration,
+                    "post_start_ack_timing": saved_timing,
+                }
+            details = json.dumps(configuration, ensure_ascii=False, sort_keys=True)
+            result = GenerationResult(candidates=candidates, details=details)
+            if self._generation_result_checkpoint is not None:
+                self._generation_result_checkpoint(result)
+            return result
         except Exception as exc:
             cancellation_checkpoint("generation_failure_handling")
-            if not isinstance(exc, (GenerationPreflightError, TemporaryGenerationBlock)):
+            if not self._generation_checkpoint_started and not isinstance(
+                exc, (GenerationPreflightError, TemporaryGenerationBlock),
+            ):
                 try:
                     observation = self._generation_failure_observation(
                         error=exc,
@@ -18279,34 +18334,6 @@ class FlowSession:
             raise
         finally:
             self._stop_current_generation_attempt_observation()
-        generation_recoveries = self._window_recovery_events[recovery_event_start:]
-        if generation_recoveries:
-            configuration = {
-                **configuration,
-                "window_recovery_events": generation_recoveries,
-            }
-        if isinstance(submission, dict) and isinstance(
-            submission.get("prestart_timing"), dict
-        ):
-            configuration = {
-                **configuration,
-                "prestart_timing": submission["prestart_timing"],
-            }
-        if isinstance(submission, dict) and isinstance(
-            submission.get("post_start_ack_timing"), dict
-        ):
-            saved_timing = submission["post_start_ack_timing"]
-            if self.prestart_timing_debug and self._post_start_ack_timing is not None:
-                saved_timing = {
-                    **saved_timing,
-                    "observer_read_breakdown": self._post_start_ack_timing.observer_read_snapshot(),
-                }
-            configuration = {
-                **configuration,
-                "post_start_ack_timing": saved_timing,
-            }
-        details = json.dumps(configuration, ensure_ascii=False, sort_keys=True)
-        return GenerationResult(candidates=candidates, details=details)
 
     def generate_one(
         self,
@@ -18350,6 +18377,8 @@ class FlowSession:
                         inspection=inspection,
                     )
                 except FlowUnusualActivity:
+                    if self._generation_checkpoint_started:
+                        raise
                     if unusual_retry_used:
                         raise
                     inspection = self._recover_unusual_activity_in_open_session(
@@ -18362,6 +18391,8 @@ class FlowSession:
                     retry_started()
                     unusual_retry_used = True
                 except FlowGenericGenerationFailed as exc:
+                    if self._generation_checkpoint_started:
+                        raise
                     self._reset_generation_interrupt_checkpoint()
                     self._set_generation_interrupt_checkpoint(
                         "generic_failure_retry_preparation"
@@ -18376,6 +18407,8 @@ class FlowSession:
                         "generic_failure_retry_dispatch"
                     )
                 except FlowPolicyRejected as exc:
+                    if self._generation_checkpoint_started:
+                        raise
                     self._reset_generation_interrupt_checkpoint()
                     self._set_generation_interrupt_checkpoint("policy_retry_preparation")
                     if (

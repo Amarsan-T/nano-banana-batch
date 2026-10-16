@@ -8,7 +8,7 @@ import shutil
 import stat
 import tempfile
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1932,32 +1932,15 @@ def execute_one(
         store.save(state)
         return True
 
-    try:
-        same_session_generation = getattr(
-            adapter,
-            "generate_one_with_unusual_activity_recovery",
-            None,
-        )
-        if callable(same_session_generation) and state.flow_project is not None:
-            result = interruptible_call(
-                "generation_dispatch", "same_session_generate_one", same_session_generation,
-                item=requested,
-                settings=settings,
-                forbidden_candidate_ids=forbidden_candidate_ids,
-                project=state.flow_project,
-                retry_started=authorize_unusual_activity_retry,
-                generic_failure_retry_started=authorize_generic_failure_retry,
-                policy_failure_retry_started=(
-                    authorize_policy_failure_retry if allow_automatic_policy_retry else None
-                ),
-            )
-        else:
-            result = interruptible_call(
-                "generation_dispatch", "adapter_generate_one", adapter.generate_one,
-                item=requested,
-                settings=settings,
-                forbidden_candidate_ids=forbidden_candidate_ids,
-            )
+    completion_persistence_started = False
+    checkpoint_result: GenerationResult | None = None
+
+    def persist_generation_result(result: GenerationResult) -> None:
+        nonlocal completion_persistence_started, checkpoint_result
+        if completion_persistence_started:
+            if result != checkpoint_result:
+                raise RuntimeError("Generation returned a different result after its completion checkpoint.")
+            return
         with cancellation_blocking_operation(
             "candidate_correlation",
             "candidate_uuid_ownership_validation",
@@ -1983,6 +1966,8 @@ def execute_one(
                     "must have distinct data-media-id values that are new to this run."
                 )
 
+        completion_persistence_started = True
+        checkpoint_result = result
         state_item.candidates = [
             CandidateRecord(
                 variant=index,
@@ -2007,8 +1992,45 @@ def execute_one(
         state_item.completed_at = utc_now()
         state.updated_at = state_item.completed_at
         store.save(state)
+
+    try:
+        checkpoint_factory = getattr(type(adapter), "generation_completion_checkpoint", None)
+        checkpoint_scope = (
+            checkpoint_factory(adapter, persist_generation_result)
+            if callable(checkpoint_factory) else nullcontext()
+        )
+        with checkpoint_scope:
+            same_session_generation = getattr(
+                adapter,
+                "generate_one_with_unusual_activity_recovery",
+                None,
+            )
+            if callable(same_session_generation) and state.flow_project is not None:
+                result = interruptible_call(
+                    "generation_dispatch", "same_session_generate_one", same_session_generation,
+                    item=requested,
+                    settings=settings,
+                    forbidden_candidate_ids=forbidden_candidate_ids,
+                    project=state.flow_project,
+                    retry_started=authorize_unusual_activity_retry,
+                    generic_failure_retry_started=authorize_generic_failure_retry,
+                    policy_failure_retry_started=(
+                        authorize_policy_failure_retry if allow_automatic_policy_retry else None
+                    ),
+                )
+            else:
+                result = interruptible_call(
+                    "generation_dispatch", "adapter_generate_one", adapter.generate_one,
+                    item=requested,
+                    settings=settings,
+                    forbidden_candidate_ids=forbidden_candidate_ids,
+                )
+        persist_generation_result(result)
         return state, state_item
     except KeyboardInterrupt as exc:
+        if completion_persistence_started:
+            exc.order = requested.order
+            raise
         evidence = _generation_interrupt_evidence(exc)
         if evidence is not None and evidence["submission_state"] == (
             GENERATION_SUBMISSION_NOT_SUBMITTED
@@ -2040,6 +2062,8 @@ def execute_one(
         exc.order = requested.order
         raise
     except GenerationPreflightError as exc:
+        if completion_persistence_started:
+            raise
         state_item.attempt_count = previous_attempt_count
         state_item.status = "pending"
         state_item.error = str(exc)
@@ -2050,6 +2074,8 @@ def execute_one(
         store.save(state)
         raise
     except TemporaryGenerationBlock as exc:
+        if completion_persistence_started:
+            raise
         if not exc.attempt_activated:
             # The durable authorization was saved, but no browser generation action
             # was consumed. Preserve every historical attempt and remove only this
@@ -2064,6 +2090,8 @@ def execute_one(
         store.save(state)
         raise
     except PolicyGenerationRejected as exc:
+        if completion_persistence_started:
+            raise
         state_item.status = "failed"
         state_item.error = str(exc)
         state_item.generation_error_code = exc.code
@@ -2073,6 +2101,8 @@ def execute_one(
         store.save(state)
         raise
     except UnusualActivityGenerationFailure as exc:
+        if completion_persistence_started:
+            raise
         state_item.status = "failed"
         state_item.error = str(exc)
         state_item.generation_error_code = exc.code
@@ -2082,6 +2112,8 @@ def execute_one(
         store.save(state)
         raise
     except (GenericGenerationFailure, HighDemandGenerationFailure) as exc:
+        if completion_persistence_started:
+            raise
         state_item.status = "failed"
         state_item.error = str(exc)
         state_item.generation_error_code = exc.code
@@ -2091,6 +2123,8 @@ def execute_one(
         store.save(state)
         raise
     except Exception as exc:
+        if completion_persistence_started:
+            raise
         state_item.status = "failed"
         state_item.error = f"{type(exc).__name__}: {exc}"
         state_item.generation_error_code = None
