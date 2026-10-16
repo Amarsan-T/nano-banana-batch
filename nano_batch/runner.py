@@ -548,16 +548,7 @@ def _download_state_item(batch: Batch, run_dir: Path, order: int) -> tuple[RunSt
     state = store.load()
     if state.batch_id != batch.batch_id:
         raise ValueError("Run state belongs to a different semantic batch.")
-    state_item = next(
-        (
-            item
-            for item in state.items
-            if item.order == requested.order and item.visual_id == requested.visual_id
-        ),
-        None,
-    )
-    if state_item is None or not state_item.matches_source(requested):
-        raise ValueError("Run state item identity does not match the source batch.")
+    state_item = _matching_run_item(state, requested)
     if state_item.status != "completed":
         raise ValueError(
             f"{state_item.visual_id} generation is {state_item.status}; "
@@ -596,9 +587,33 @@ def _assert_unique_download_ownership(
     state_item: RunItemState,
     candidate: CandidateRecord,
 ) -> None:
+    def identity_key(value):
+        if isinstance(value, str) and re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", value, re.I,
+        ):
+            return value.lower()
+        return value  # Legacy opaque identities keep exact string semantics.
+
+    if candidate.candidate_id is not None and not isinstance(candidate.candidate_id, str):
+        raise ValueError(
+            f"{CANDIDATE_UUID_OWNERSHIP_CONFLICT}: recorded candidate identity must be a string or null."
+        )
     candidate_id = _persisted_candidate_id(candidate)
+    if not isinstance(candidate_id, str) or not candidate_id:
+        raise ValueError(
+            f"{CANDIDATE_UUID_OWNERSHIP_CONFLICT}: candidate identity must be a non-empty string."
+        )
+    if candidate.asset_url is not None and not isinstance(candidate.asset_url, str):
+        raise ValueError("Recorded asset identity must be a string or null.")
+    url_id = _persisted_candidate_id(replace(candidate, candidate_id=None))
+    if url_id is not None and identity_key(url_id) != identity_key(candidate_id):
+        raise ValueError("Persisted candidate UUID conflicts with its recorded asset identity.")
     expected_owner = (state_item.order, candidate.variant)
-    owners = _candidate_ownerships(state).get(candidate_id or "", [])
+    key = identity_key(candidate_id)
+    owners = [
+        owner for saved_id, entries in _candidate_ownerships(state).items()
+        if identity_key(saved_id) == key for owner in entries
+    ]
     if not candidate_id or owners != [expected_owner]:
         owner_text = ", ".join(
             f"order {order} v{variant:02d}" for order, variant in owners
@@ -902,6 +917,14 @@ def plan_download_one(
 ) -> DownloadPlan:
     """Build a read-only one-item plan and fail before any browser interaction."""
     state, state_item = _download_state_item(batch, run_dir, order)
+    return _plan_download_state(batch, run_dir, state, state_item, overwrite=overwrite)
+
+
+def _plan_download_state(
+    batch: Batch, run_dir: Path, state: RunState, state_item: RunItemState,
+    *, overwrite: bool = False,
+) -> DownloadPlan:
+    """Apply identical download checks to a validated, read-only state snapshot."""
     asset_dir = run_asset_directory(run_dir)
     staging_dir = asset_dir / (".staging-" + uuid.uuid4().hex)
     try:
@@ -922,6 +945,9 @@ def plan_download_one(
     plans = []
     seen_destinations = set()
     for candidate in state_item.candidates:
+        # Valid bytes do not prove logical ownership. Completed/skip candidates
+        # require the same UUID consistency as candidates that still download.
+        _assert_unique_download_ownership(state, state_item, candidate)
         planned_staged_path = deterministic_staging_path(run_dir, staging_dir, candidate.variant)
         suffix = Path(candidate.suggested_filename).suffix.lower().lstrip(".")
         if suffix not in {"png", "jpg", "jpeg", "webp"}:
@@ -967,7 +993,7 @@ def plan_download_one(
             if overwrite:
                 raise ValueError("Reconcile pending downloads without --overwrite first.")
             destination, staged = validate_pending_download_ownership(
-                batch=batch, state=state, order=order, variant=candidate.variant, run_dir=run_dir,
+                batch=batch, state=state, order=state_item.order, variant=candidate.variant, run_dir=run_dir,
             )
             if existing_destination is not None and existing_destination != destination:
                 raise FileExistsError("Pending download conflicts with an existing canonical extension.")
@@ -995,8 +1021,6 @@ def plan_download_one(
                     "Pass --overwrite only after inspecting it."
                 )
             action = "overwrite"
-        if action != "skip_valid":
-            _assert_unique_download_ownership(state, state_item, candidate)
         if candidate.pending_download_commit is None:
             _assert_pending_download_file_claims(
                 state, candidate, run_dir, destination, planned_staged_path,
@@ -1233,6 +1257,8 @@ def _assert_repair_target_has_no_canonical_assets(
         "downloaded_at",
     )
     for candidate in item.candidates:
+        if candidate.pending_download_commit is not None:
+            raise ValueError("Order has pending download evidence; candidate repair refused.")
         if candidate.download_status == "completed" or any(
             getattr(candidate, field_name) is not None
             for field_name in canonical_metadata_fields
@@ -1287,7 +1313,7 @@ def _assert_earlier_orders_valid_for_repair(
             earlier_ownerships.setdefault(candidate_id, []).append(
                 (state_item.order, candidate.variant)
             )
-        download_plan = plan_download_one(batch, run_dir, batch_item.order)
+        download_plan = _plan_download_state(batch, run_dir, state, state_item)
         if not download_plan.candidates or any(
             candidate.action != "skip_valid" for candidate in download_plan.candidates
         ):
@@ -1352,10 +1378,15 @@ def plan_repair_order_candidates(
             f"Order {order} has no candidate UUID conflict with another order; repair refused."
         )
 
+    # The explicit repair removes only this proven asset/receipt-free target's
+    # disputed candidate claims. Validate earlier assets against that projected
+    # post-repair state in memory, without weakening normal Resume ownership.
+    projected = copy.deepcopy(state)
+    _matching_run_item(projected, requested).candidates = []
     earlier_orders = _assert_earlier_orders_valid_for_repair(
         batch,
         run_dir,
-        state,
+        projected,
         order,
     )
     later_orders = tuple(item.order for item in batch.items if item.order > order)
