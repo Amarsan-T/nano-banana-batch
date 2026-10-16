@@ -1990,3 +1990,115 @@ JavaScript fragments remain unchanged. Final staged privacy/inventory and fresh
 remote-history checks gate the single authorized commit and normal push; the
 resulting SHA and clean synchronized tree are verified separately. No private
 original, real run state, browser profile, image or live Flow operation was accessed.
+
+## Six-issue reliability audit and targeted hardening
+
+The independent developer requested investigation of six concerns at published
+`7d32596`: historical failure attribution, interruption after JPEG download,
+Playwright compatibility, Ctrl+C, atomic JPEG installation and completed-Order UUID
+consistency. They directed preservation of working behavior, regression-first fixes,
+offline verification, separate commits where appropriate and publication only after
+safety checks. Codex performed the source investigation, synthetic reproductions,
+implementation and testing described here. The earlier developer-written pending
+ownership validator remains unchanged, confirmed by AST comparison. No exclusive
+historical authorship is inferred or reassigned.
+
+Three concerns had actual gaps; the prior receipt/installation corrections and
+Playwright API floor did not warrant another implementation rewrite:
+
+- Failure-specific content provenance already excluded unchanged/remounted history,
+  but a tile with a UUID known before Start could acquire novel error text and be
+  treated as a confirmed current failure. Synthetic runs reproduced this both on
+  the old tile and on a remount with the same UUID. The existing bounded baseline
+  now retains candidate IDs, preserved on re-arm. The nearest Flow tile or an
+  ancestor's explicit media identity supplies ownership; shared history cannot.
+  Contradictory historical ownership reports terminal attribution ambiguity,
+  including after local progress, without named-failure retries or limit waiting.
+  UUID case variants compare equivalently; legacy opaque identities remain exact.
+  This is not proof of the origin of every unseen, unidentifiable asynchronous error.
+- Completed assets could take `skip_valid` without the UUID guard used for downloads.
+  Direct download lookup also accepted the first duplicate matching Order. Planning
+  now requires the existing unique-identity check before every candidate action,
+  including completed assets; duplicate matching Orders use the existing strict
+  matching helper. The shared ownership guard rejects missing/malformed identity,
+  contradictory legacy URL identity and duplicate logical UUIDs, including hex case
+  variants. Valid legacy URL-only identities remain supported. No asset or persisted
+  identity is normalized, adopted or rewritten by these read-only checks.
+- Batch cancellation was latched, but standalone `generate-one`/`download-one` lacked
+  that scope. Swallowed signals could report success; translated generation signals
+  could become ordinary failed state. Both commands now reuse the latch and an exit
+  boundary; both generation-adapter dispatch paths use the existing interruptible
+  call. A further regression reproduced normal exit after the final batch save had
+  latched cancellation. The existing per-invocation batch scope now also wraps command
+  execution through that boundary, preserving launcher scope reset on Resume. Already
+  saved completion is retained, and all these signals exit as cancellation.
+
+The first 15 new tests produced 30 failing assertions/subtests before correction,
+with zero test errors. Five additional CLI cancellation tests all failed before
+their correction (incorrect exit 0 or 2 rather than 130). Follow-up case-variant
+ownership and final-batch-exit regressions were also shown failing before their
+corrections. No existing test was removed, edited or weakened. The final additions
+contain 27 tests: nine historical-UUID attribution, twelve completed ownership and
+six CLI cancellation tests; the ownership module also covers pending-receipt repair
+protection. Final verification below covers the resulting complete snapshot.
+
+The first full run executed 1,320 tests with zero assertion failures but five errors
+in the existing explicit candidate-repair regressions. The new normal guard blocked
+earlier completed assets while repair was still considering the specifically disputed
+target's claims. This was a compatibility regression in the working correction,
+not a reason to weaken those tests or normal Resume. The explicit repair preflight
+now validates earlier assets using the same read-only planning checks on a deep-copied
+post-repair projection. Only the disputed target's candidate claims are removed from
+that copy, after proving it has no canonical assets/metadata or pending receipt.
+The returned repair plan retains original state; no real write occurs during preview.
+An added regression proved that the earlier repair path could discard a pending
+receipt on an asset-free target; repair now refuses that case. Additional corrupt
+false/zero/empty-container identity regressions failed before adding a type check
+ahead of legacy URL fallback. A genuinely absent legacy ID remains compatible.
+
+Existing interruption tests exercise receipt-before-install, staging-only recovery,
+hard-link and canonical-only rename recovery, candidate save failure, atomic receipt
+removal/completion, stale Order finalization, idempotency, incorrect bytes/ownership,
+no overwrite, read-only/shared files, Windows sharing failures and unsupported
+platforms. Their successful execution supports retaining `downloads.py`, `state.py`
+and the pending-record schema. This does not turn unreceipted legacy orphans into
+recoverable assets or give an acknowledged-but-unpersisted generation a new baseline.
+
+Both attachment calls were checked against the
+[official Playwright 1.60.0 source](https://github.com/microsoft/playwright-python/blob/v1.60.0/playwright/sync_api/_generated.py):
+`is_local` and `no_defaults` are accepted, with the latter introduced in 1.60.
+Static binding examined 212 public API call shapes across 30 method names, with
+receiver review for ambiguous method names. Application helper methods were excluded.
+The declared `playwright>=1.60,<2` remains appropriate as an API floor; no exact pin,
+package installation or upgrade occurred. This was not an installed Playwright or
+browser/driver execution matrix. The developer's reported 1.64.0/Python 3.12.10 real
+acceptance remains distinct from Codex's Python 3.12.14 synthetic audit runtime.
+
+The focused suite covering all six issues passed 467 tests in 87.953 seconds,
+without failures, errors or skips. Python compilation and five embedded JavaScript
+syntax checks passed. AST review confines production changes to the observer setup,
+runner ownership/repair/planning and cancellation boundaries, and two CLI functions.
+The changes add no
+Start activation, navigation, Flow operations, sleeps or automatic retry budgets.
+README, AGENTS and `docs/RELIABILITY_AUDIT.md` record verified behavior, restart
+evidence requirements, API support distinctions and residual TOCTOU, single-writer,
+storage/provider, power-loss and live-acceptance limitations. Full-suite and final
+publication verification results follow below.
+
+Final corrected verification: the 12-test ownership module passed, and the combined
+ownership/runner suite passed 68 tests in 176.427 seconds, including all previously
+failing repair cases. The final cross-cutting six-issue suite passed 760 tests in
+89.658 seconds. These suites overlap in ownership coverage and are not added as a
+unique-test total. The complete final offline suite passed 1,321 tests in 259.548
+seconds, with zero failures, errors, skips, expected failures or unexpected
+successes. Python source/test SHA-256 snapshots were unchanged during that run.
+The final inventory adds 27 tests; no existing test was edited or weakened.
+
+All four publication-security checks, Python compilation, five embedded JavaScript
+syntax checks and Git whitespace checks passed. AST review confirmed the original
+developer-written pending validator unchanged; canonical installation and state
+serialization files are unchanged. Final staged inventory/privacy checks, fresh
+remote ancestry verification and normal push verification gate publication of
+the three separate fixes. No private checkout, real run, profile, image, prompt,
+Chrome/Flow session or generation credit was accessed. User-operated real
+acceptance remains necessary before claiming larger-batch reliability.

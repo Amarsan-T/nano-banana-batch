@@ -11,6 +11,9 @@ It accepts the same basic `batch.json` shape exported by YouTube Factory, preser
 See the [development history](docs/DEVELOPMENT_HISTORY.md) for project origins,
 milestones, and provenance limitations.
 
+The [six-issue reliability audit](docs/RELIABILITY_AUDIT.md) records verified
+recovery boundaries, recent hardening and remaining acceptance limitations.
+
 ## Public repository and private local data
 
 This public copy contains source, offline tests, and reviewed example inputs.
@@ -76,6 +79,12 @@ both CDP attachment paths use `is_local` (added in 1.58) and `no_defaults` (adde
 in 1.60), as documented in the
 [Playwright API reference](https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp).
 No claim is made that the entire allowed dependency range has been tested.
+The later reliability audit checked both attachment calls and 212 public API call
+shapes against the official Playwright 1.60.0 Python source. This establishes API
+availability, not installed-package, driver or live-Flow acceptance at the minimum.
+The developer reports real acceptance with Python 3.12.10 and Playwright 1.64.0;
+Codex did not inspect that environment. A clean-Windows installation and a browser
+version matrix have not been reproduced. The API floor remains `>=1.60,<2`.
 
 Install Python 3.12 and Node.js before following these commands. Node.js must be on
 `PATH` to run the embedded JavaScript observer regressions; those tests skip if
@@ -323,7 +332,8 @@ retry. See the failure/retry rules below rather than treating every failure alik
 
 `download-one` requires an existing generation with `status: completed` and persisted candidates. It never submits a prompt or regenerates the item.
 
-Preview the exact candidates, actions, and deterministic destinations with no browser or state interaction:
+Preview the exact candidates, actions, and deterministic destinations without
+browser actions or state writes; saved ownership and local assets are validated:
 
 ```powershell
 & '.\.venv\Scripts\python.exe' app.py download-one 'data\sample_batch.json' --order 1 --preview
@@ -614,6 +624,25 @@ does not reset them. No recovery rotates the Flow project, substitutes a candida
 or bypasses account restrictions. Only exact, eligible failure classifications
 receive the automatic paths above.
 
+The pre-Start baseline also retains known candidate UUIDs. New failure content
+inside a tile already identified before Start cannot establish a confirmed
+current-attempt failure, even after remount or a progress update; it stops with
+attribution ambiguity. This uses only the nearest tile or an ancestor's explicit
+media identity, never UUIDs collected from shared history. Unchanged historical
+failures remain excluded, and new genuine failures retain their classifications.
+An unseen, unrelated failure with no identifying evidence cannot be distinguished
+universally by DOM timing alone; the single-writer/session assumptions still apply.
+
+Completed downloads still require unique candidate ownership across Orders and
+variants before they can be skipped. Explicit and legacy URL identities must agree
+when both identify a candidate, and a duplicate matching Order is rejected.
+Canonical UUID hex case is equivalent for these comparisons; legacy opaque IDs
+retain exact string semantics. Valid bytes alone cannot resolve conflicting ownership.
+The existing explicit candidate-repair command remains separate: it may validate
+earlier assets against an in-memory post-repair projection only after the disputed
+target is proven to have no canonical assets or pending receipt. Normal Resume
+never applies that projection or clears disputed ownership automatically.
+
 During generation/download batches, one Ctrl+C requests cancellation. Direct batch
 commands exit 130 after unwind; the launcher offers its recovery menu. A
 submitted/ambiguous attempt retains explicit Retry protection. Intentional batch
@@ -621,6 +650,10 @@ teardown disconnects the driver without closing
 externally launched Chrome and skips fresh CDP/browser cleanup calls, including
 download-behavior reset and staging deletion. Completed generation, candidate
 UUIDs, and committed assets remain available for download-only Resume.
+Standalone `generate-one` and `download-one` use the same first-signal latch.
+Swallowed/translated interrupts and a late signal after the final batch save still
+exit as cancellation. If completion was already saved, it stays completed and the
+next Resume validates/skips it; cancellation does not undo committed work.
 
 ## Operational limitations and verification status
 

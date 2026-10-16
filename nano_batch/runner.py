@@ -1939,7 +1939,8 @@ def execute_one(
             None,
         )
         if callable(same_session_generation) and state.flow_project is not None:
-            result = same_session_generation(
+            result = interruptible_call(
+                "generation_dispatch", "same_session_generate_one", same_session_generation,
                 item=requested,
                 settings=settings,
                 forbidden_candidate_ids=forbidden_candidate_ids,
@@ -1951,7 +1952,8 @@ def execute_one(
                 ),
             )
         else:
-            result = adapter.generate_one(
+            result = interruptible_call(
+                "generation_dispatch", "adapter_generate_one", adapter.generate_one,
                 item=requested,
                 settings=settings,
                 forbidden_candidate_ids=forbidden_candidate_ids,

@@ -13,7 +13,7 @@ from nano_batch.batch import (
     load_prompts_file,
     single_prompt_batch,
 )
-from nano_batch.cancellation import authoritative_cancellation_scope
+from nano_batch.cancellation import authoritative_cancellation_scope, interruptible_call
 from nano_batch.errors import PolicyGenerationRejected, TemporaryGenerationBlock, WAITING_FOR_FLOW_LIMIT_RESET
 from nano_batch.models import Batch, GenerationSettings
 from nano_batch.launcher import (
@@ -341,7 +341,8 @@ def _run_sequential_command(
         try:
             with authoritative_cancellation_scope():
                 with windows_execution_state_guard(enabled=isinstance(adapter, FlowSession)):
-                    final_state, outcomes = execute_sequential_batch(
+                    final_state, outcomes = interruptible_call(
+                        "batch_execution", "execute_sequential_batch", execute_sequential_batch,
                         batch,
                         run_dir,
                         adapter,
@@ -1628,6 +1629,11 @@ def main() -> int:
         parser.error = _staging_argument_error
     args = parser.parse_args()
     try:
+        if args.command in {"generate-one", "download-one"}:
+            with authoritative_cancellation_scope():
+                return int(interruptible_call(
+                    "single_order_command", "execute_cli_command", args.func, args,
+                ))
         return int(args.func(args))
     except KeyboardInterrupt:
         print("\nInterrupted.")

@@ -171,6 +171,11 @@ introduced after the Start boundary and rechecks those containers on each normal
 result poll. Exact matching considers normalized visible/text and accessibility
 labels independently, so nested inline content is preserved without allowing an
 unchanged pre-Start card to become current-attempt evidence.
+The same bounded Start-boundary traversal retains historical candidate UUIDs.
+Novel failure text on a known historical UUID owner, including a remounted tile,
+reports terminal attribution ambiguity instead of a confirmed failure or success.
+Only the nearest Flow tile may supply descendant UUID ownership; shared history
+ancestors cannot. Re-arming preserves this evidence; UUID hex case is equivalent.
 The first exact current-attempt unusual-activity failure receives one bounded
 automatic recovery while the same `FlowSession`, browser connection, CDP session,
 tab, Order, prompt, and persisted project remain selected. The existing tab
@@ -255,6 +260,14 @@ project, neighboring Orders, assets, and retry counts remain unchanged. Resume
 matches the original source and submits the effective stored prompt; changed
 source files still fail the existing semantic Batch ID/identity checks. Legacy
 states without the binding keep exact original-prompt matching.
+Completed assets never waive candidate ownership checks. Download planning and
+Resume require unique logical UUID ownership, consistent legacy URL identity when
+available, and exactly one matching saved Order, including for `skip_valid`.
+UUID hex case compares equivalently; legacy opaque IDs retain exact string semantics.
+Explicit candidate repair validates the projected post-repair state in memory only
+after proving the target has no canonical assets or pending receipt. Normal Resume
+retains all claims and cannot bypass the ownership check through that repair path.
+
 ## 9. Browser, authentication, and security
 Use installed Chrome, `.flow_chrome_profile`, loopback CDP at
 `127.0.0.1:9222`, and manual authentication.
@@ -315,6 +328,10 @@ submitted/ambiguous exactly-once protection and requires explicit Retry.
 KeyboardInterrupt is never converted into an ordinary Flow failure. State,
 assets, ownership, policy-retry history, and project identity remain intact.
 Direct non-launcher commands exit 130 after clean interruption.
+Standalone `generate-one` and `download-one` share the first-signal latch and
+check cancellation through command exit. A translated interrupt remains an
+interrupt, including after the final batch Order save. Already durable completion
+is preserved; subsequent Resume validates and skips it rather than regenerating.
 The first SIGINT is both immediate and latched for the active batch invocation.
 Bounded setup, editor, result/failure, retry/recovery, candidate, download, and
 window waits recheck that shared cancellation state, so no nested loop can require
