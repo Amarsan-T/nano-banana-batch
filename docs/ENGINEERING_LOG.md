@@ -2163,3 +2163,32 @@ Only this engineering log is changed by the acceptance-record task. No applicati
 source, runtime state, images, prompts or browser data are changed. The requested
 Git action is one local documentation commit; publication requires separate
 explicit approval.
+
+## Five-Order live acceptance of f9e5020 (recorded 2026-10-16)
+
+The independent developer reported another user-operated live acceptance batch
+against application commit `f9e5020`: `runs/acceptance_f9e5020_five_orders_01`.
+Google Flow used Nano Banana 2.1, Image mode, 16:9 and x1. The developer reported:
+
+- Five sequential Orders generated and downloaded successfully: Completed 5,
+  Failed 0.
+- All five JPEGs fully decoded through Pillow and measured 1376x768.
+- Resume Preview showed all five Orders as `completed -> skip`, with `skip_valid`
+  downloads.
+- Real Resume showed all five as `generation=skipped_completed` and
+  `downloads=skipped_valid`. No duplicate generation or download was reported.
+
+Codex recorded the developer's observations without opening the run, images,
+prompts, browser profile or live Flow session. These are user-reported real
+execution results, distinct from automated offline tests and not independently
+verified by inspecting private artifacts. The date above records this entry;
+no execution timestamp is inferred. The earlier acceptance entry and unpublished
+documentation commit `5a29362` are preserved.
+
+This extends the reported ordinary sequential and completed-Resume acceptance to
+five Orders. It did not validate minimized Chrome, crash recovery or Ctrl+C
+failure scenarios. Fully minimized active operation remains unsupported, and
+larger batches and failure-recovery paths still need separate acceptance. The
+acknowledged-generation ownership/provenance limitations recorded above remain.
+This change is documentation-only; no new live testing or application execution
+was performed by Codex. Publication is not authorized by this local record.
