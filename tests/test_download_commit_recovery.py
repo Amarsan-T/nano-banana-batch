@@ -1,6 +1,7 @@
 """Stage 2.2 checkpoint: reproduce the commit-before-state recovery gap offline."""
 
 import copy
+import os
 import unittest
 from dataclasses import asdict
 from pathlib import Path
@@ -9,6 +10,7 @@ from uuid import UUID
 
 from PIL import Image
 
+from nano_batch import downloads
 from nano_batch.cancellation import authoritative_cancellation_scope
 from nano_batch.downloads import commit_staged_file, validate_image_file
 from nano_batch.models import (
@@ -229,7 +231,7 @@ class DownloadCommitRecoveryTests(unittest.TestCase):
         self.assertEqual(len(inspected), 1)
         self.assertIsNone(item.candidates[0].pending_download_commit)
 
-    def test_interrupt_before_install_recovers_the_saved_staged_image(self):
+    def assert_interrupted_staging_recovers(self):
         with authoritative_cancellation_scope() as cancellation:
             with patch("nano_batch.runner.commit_staged_file", side_effect=lambda *a, **k: cancellation.request()), self.assertRaises(KeyboardInterrupt):
                 # Returning an interrupt is insufficient; the shared latch raises
@@ -241,11 +243,72 @@ class DownloadCommitRecoveryTests(unittest.TestCase):
         self.assertFalse(self.canonical.exists())
         staged = self.run_dir / pending.staging_relative_path
         self.assertTrue(staged.is_file())
-        recovered, _ = execute_sequential_batch(self.batch, self.run_dir, self.resume_adapter(), self.settings)
-        self.assertEqual(self.canonical.read_bytes(), staged.read_bytes())
-        self.assertEqual(recovered.items[0].download_attempt_count, saved.items[0].download_attempt_count)
-        self.assertEqual(recovered.items[0].download_status, "completed")
-        self.assertIsNone(recovered.items[0].candidates[0].pending_download_commit)
+        # Windows rename consumes this pathname; retain independent evidence
+        # before recovery rather than requiring a second name for the bytes.
+        expected_bytes = staged.read_bytes()
+        expected_metadata = validate_image_file(staged)
+        for field, value in asdict(expected_metadata).items():
+            self.assertEqual(getattr(pending, field), value)
+        adapter = self.resume_adapter()
+        recovered, outcomes = execute_sequential_batch(self.batch, self.run_dir, adapter, self.settings)
+        self.assertEqual(self.canonical.read_bytes(), expected_bytes)
+        self.assertEqual(validate_image_file(self.canonical), expected_metadata)
+        item = recovered.items[0]
+        candidate = item.candidates[0]
+        self.assertEqual(item.status, "completed")
+        self.assertEqual(item.download_status, "completed")
+        self.assertEqual(candidate.download_status, "completed")
+        self.assertEqual(candidate.candidate_id, pending.candidate_id)
+        self.assertEqual(candidate.candidate_id, self.candidate_id)
+        self.assertEqual(candidate.local_path, str(self.canonical))
+        self.assertEqual(item.output_files, [str(self.canonical)])
+        self.assertIsNone(candidate.pending_download_commit)
+        for field, value in asdict(expected_metadata).items():
+            self.assertEqual(getattr(candidate, field), value)
+        for field in (
+            "attempt_count", "download_attempt_count", "automatic_policy_retry_count",
+            "automatic_generic_failure_retry_count", "prompt", "completed_at",
+        ):
+            self.assertEqual(getattr(item, field), getattr(saved.items[0], field))
+        self.assertEqual(recovered.batch_id, saved.batch_id)
+        self.assertEqual(recovered.flow_project, saved.flow_project)
+        self.assertEqual(outcomes[0].generation, "skipped_completed")
+        adapter.assert_not_called()
+        self.assertEqual(adapter.mock_calls, [])
+        self.assertEqual(self.adapter.calls, [(self.candidate_id, 1)])
+        self.assertEqual(self.store.load(), recovered)
+
+        state_bytes = self.store.path.read_bytes()
+        repeated, outcomes = execute_sequential_batch(self.batch, self.run_dir, adapter, self.settings)
+        self.assertEqual(repeated, recovered)
+        self.assertEqual(outcomes[0].downloads, "skipped_valid")
+        self.assertEqual(self.store.path.read_bytes(), state_bytes)
+        self.assertEqual(self.canonical.read_bytes(), expected_bytes)
+        self.assertEqual(adapter.mock_calls, [])
+        return staged
+
+    def test_interrupt_before_install_recovers_the_saved_staged_image(self):
+        self.assert_interrupted_staging_recovers()
+
+    def test_interrupt_before_install_recovers_through_hard_link(self):
+        with patch.object(downloads.os, "link", wraps=os.link) as link, patch.object(
+            downloads.os, "rename", side_effect=AssertionError("Hard-link recovery must not rename"),
+        ) as rename:
+            staged = self.assert_interrupted_staging_recovers()
+        link.assert_called_once()
+        rename.assert_not_called()
+        self.assertTrue(staged.is_file())
+        self.assertTrue(os.path.samefile(staged, self.canonical))
+
+    @unittest.skipUnless(os.name == "nt", "Native Windows no-overwrite rename semantics")
+    def test_interrupt_before_install_recovers_through_windows_rename(self):
+        with patch.object(downloads.os, "link", side_effect=OSError("synthetic hard-link unavailable")) as link, patch.object(
+            downloads.os, "rename", wraps=os.rename,
+        ) as rename:
+            staged = self.assert_interrupted_staging_recovers()
+        link.assert_called_once()
+        rename.assert_called_once_with(staged.resolve(), self.canonical)
+        self.assertFalse(staged.exists())
 
     def test_failed_pending_save_prevents_installation(self):
         real_save = RunStateStore.save

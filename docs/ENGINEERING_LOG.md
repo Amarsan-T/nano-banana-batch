@@ -2192,3 +2192,58 @@ larger batches and failure-recovery paths still need separate acceptance. The
 acknowledged-generation ownership/provenance limitations recorded above remain.
 This change is documentation-only; no new live testing or application execution
 was performed by Codex. Publication is not authorized by this local record.
+
+## Windows staged-file recovery regression correction (2026-10-16)
+
+Following the read-only Ctrl+C investigation, the independent developer requested
+reproduction and correction of the staging-path test error, with production
+behavior changed only if a real defect was established. Codex investigated and
+updated the regression tests on the existing documentation branch at `fd56289`,
+preserving local commits `5a29362` and `fd56289` and all published history.
+
+Before correction, forcing hard-link creation to fail reproduced one error in
+`test_interrupt_before_install_recovers_the_saved_staged_image`: after successful
+Windows rename recovery, the test tried to read the consumed staging filename.
+The earlier restricted-run hard-link denial had exposed this path. Production
+already supports a flushed, closed staging file being renamed without overwrite
+on Windows; hard-link installation instead retains the staging name. The test's
+assumption that both paths retain that name was invalid. No production correction
+is required for this finding.
+
+The original regression now compares canonical bytes against a snapshot taken
+before recovery and validates decoded-image metadata against the saved pending
+receipt. Shared assertions check candidate UUID, canonical path, batch/project,
+generation/download completion, cleared receipt, unchanged attempt/retry counts,
+no generation or download adapter calls during recovery, and idempotent repeated
+Resume with unchanged persisted state and canonical bytes. Two additional tests
+exercise actual hard-link installation without rename and native Windows rename
+after forced hard-link unavailability, asserting their different source-name
+lifecycles. No existing integrity, ownership or no-overwrite test was removed or
+weakened, and production code remains unchanged.
+
+The original failing regression and both explicit installation-path tests passed
+after correction (three tests in 1.453 seconds). Verification uses only synthetic
+temporary fixtures in the public checkout's ignored scratch directory. Native
+filesystem tests run with the Windows permissions required to exercise hard
+links; this is distinct from live Flow acceptance. No private checkout, real run
+state/image, browser profile or Chrome/Flow session was accessed. Further focused,
+full-suite and static/security verification results follow below. Only one local
+commit is authorized; no merge or publication is authorized.
+
+Final verification: the focused cancellation/recovery, installation, ownership,
+confinement and runner selection passed 256 tests in 154.373 seconds. The complete
+offline suite passed 1,323 tests in 256.818 seconds, with zero failures, errors,
+skips, expected failures or unexpected successes. Source/test SHA-256 snapshots
+were unchanged during the full run. These totals include the two new tests; the
+focused and full suites overlap and are not additive.
+
+All four publication-security checks passed. In-memory Python compilation passed
+for all 63 application/test Python files without writing bytecode; three embedded
+observer scripts passed Node syntax checks without browser execution. Compilation
+reported an existing invalid-escape SyntaxWarning in the unchanged synthetic
+Flow test harness; it was not changed in this narrowly scoped correction. Git
+whitespace checks passed. AST scope review confirmed all 11 original recovery
+test names retained, only the affected original test changed, and exactly two
+tests added. Git confirms no application source changes relative to the preceding
+HEAD; earlier engineering-log entries remain unchanged. Only this test module and the
+appended engineering record are included in the local correction.
