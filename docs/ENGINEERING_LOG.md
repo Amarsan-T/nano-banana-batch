@@ -2353,3 +2353,74 @@ reconstruct missing ownership retroactively. Preserve that run; explicit Retry
 is a new potentially paid submission, not adoption of the existing Flow image.
 Both corrections require user-operated live Ctrl+C acceptance after publication;
 Codex performed no live browser, generation or download operations.
+
+## Cancellation arriving during normal session teardown (2026-10-16)
+
+The developer requested a read-only historical review of published `59f20fd`,
+emphasizing reliable cancellation and the intentionally unsupported minimized
+window mode. Codex compared the available public history, without reading the
+private checkout. The first public snapshot already contained the current
+first-signal latch and launcher recovery architecture; this does not establish
+line-by-line equivalence with the developer's earlier private version or negate
+the developer's firsthand report that its Ctrl+C worked correctly.
+
+The review reproduced a remaining P2 transition gap in both the first public
+snapshot and `59f20fd`: `close()` selected normal teardown before Ctrl+C arrived
+inside a synchronous cleanup call. Later CDP detach or browser-disconnect calls
+could still start after cancellation was latched. A translated or swallowed
+interrupt could also escape the session-exit cancellation check until the outer
+command boundary. This is an inherited gap, not a regression attributed to the
+two preceding corrections, and it is separate from ownership reconciliation of
+an unfinished acknowledged generation.
+
+The developer authorized the narrow correction, regressions and publication.
+Codex reused `interruptible_call` around the existing focus-emulation reset, page
+CDP detach, attached-browser disconnect and normal driver stop. Each operation
+now rechecks the existing first-signal latch before and after the call; translated
+or swallowed cancellation exits as KeyboardInterrupt before another browser RPC.
+The driver-stop path remains in `finally`, is attempted once, and releases the
+adapter's local handles. A direct KeyboardInterrupt without an active latch also
+skips the remaining browser calls. Normal operation order and existing best-effort
+CDP error handling are preserved; unrelated normal disconnect/stop exceptions
+still propagate. An error during intentional driver shutdown remains reported by
+type without replacing the original cancellation or exposing its message.
+
+The existing selective TargetClosedError handling is retained. Protocol futures
+are captured before either driver-stop path, since Ctrl+C can first arrive during
+a normal stop after the callback registry has been cleared. Only intentional
+shutdown observes the connection's identical owned shutdown error; unrelated,
+pre-existing and normal-disconnect errors retain reporting. The exact transport-
+warning filter is still scoped to intentional stop and is removed afterward.
+No global error handler, browser RPC, retry loop, sleep or browser close was added
+to intentional teardown. Production changes are limited to `FlowSession.close()`;
+the completed-generation checkpoint, state schema, generation/download actions,
+ownership rules and Resume decisions are unchanged.
+
+Regression-first verification: before the production correction, the initial
+16 new test methods reported 15 failed subcases and two errors, including continued
+browser cleanup, swallowed/translated interrupts and unobserved shutdown futures.
+Eighteen final additions cover cancellation before teardown and at each cleanup
+operation, direct/translated/swallowed signals, normal operation order, repeated
+cleanup, first-signal preservation, owned versus unrelated future errors, local
+handle/filter release, shutdown failure reporting and the unchanged CLI exit 130
+with `Interrupted.`. Existing tests were not weakened.
+
+Final focused cancellation, completion-checkpoint, download recovery, composer,
+launcher and CLI selection: 270 passed in 31.329 seconds. Complete offline suite:
+1,363 passed in 403.920 seconds, with zero failures, errors, skips, expected failures
+or unexpected successes. Source/test SHA-256 snapshots matched before and after
+the full run. A preliminary explicit-top-level discovery invocation failed before
+running tests; the repository's standard start-directory discovery then ran the
+complete suite without source changes. All four publication-security checks,
+Python compilation, three embedded observer JavaScript syntax checks and Git
+whitespace checks passed. AST review confirmed that only `FlowSession.close()`
+changed in production and all nine existing protocol-future tests were unchanged.
+Three additional driver-free probes using installed Playwright 1.64.0's actual
+Connection/ProtocolCallback classes confirmed error visibility on normal stop
+and selective shutdown-error handling after cancellation during detach or stop.
+
+Live Ctrl+C acceptance remains required. An in-flight SDK/OS operation or driver
+shutdown is not given a new finite wall-time guarantee. This correction prevents
+subsequent application cleanup RPCs after cancellation; it does not recover an
+unfinished generation, prove renderer responsiveness or support minimized Chrome.
+No private checkout, real run, prompt, image, profile or live Flow was accessed.

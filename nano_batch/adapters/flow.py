@@ -5415,24 +5415,64 @@ class FlowSession:
         self._focus_emulation_enabled = False
         self._browser = None
         self._playwright = None
+        intentional_cancellation = intentional_cancellation or cancellation_requested()
         asyncio_logger = logging.getLogger("asyncio")
         teardown_filter = _IntentionalCancellationTransportNoiseFilter()
-        if intentional_cancellation:
-            asyncio_logger.addFilter(teardown_filter)
-            mark_cleanup_started()
         cleanup_error: BaseException | None = None
         try:
+            if not intentional_cancellation:
+                if page_cdp_session is not None:
+                    try:
+                        if focus_emulation_enabled:
+                            interruptible_call(
+                                "session_cleanup", "focus_emulation_reset",
+                                page_cdp_session.send,
+                                "Emulation.setFocusEmulationEnabled",
+                                {"enabled": False},
+                            )
+                    except Exception:
+                        pass
+                    try:
+                        interruptible_call(
+                            "session_cleanup", "page_cdp_detach", page_cdp_session.detach,
+                        )
+                    except Exception:
+                        pass
+                if browser is not None:
+                    # Browser.close() disconnects from this externally launched Chrome.
+                    interruptible_call(
+                        "session_cleanup", "browser_disconnect", browser.close,
+                    )
+        except KeyboardInterrupt as exc:
+            annotate_keyboard_interrupt(exc)
+            intentional_cancellation = True
+            raise
+        finally:
+            intentional_cancellation = intentional_cancellation or cancellation_requested()
             if intentional_cancellation:
-                # The first Ctrl+C has already made the active Playwright call
-                # non-authoritative. Avoid starting more synchronous CDP/browser
-                # RPCs during unwind; stopping Playwright disconnects its driver
-                # and externally attached Chrome without closing that Chrome.
+                asyncio_logger.addFilter(teardown_filter)
+                mark_cleanup_started()
+            try:
                 if playwright is not None:
+                    # Snapshot before either stop path: the first signal can also
+                    # arrive inside a normal stop after its callbacks were cleared.
                     interrupted_futures = self._interrupted_protocol_futures(playwright)
                     try:
-                        playwright.stop()
+                        if intentional_cancellation:
+                            # Disconnect locally; never start another browser RPC.
+                            playwright.stop()
+                        else:
+                            interruptible_call(
+                                "session_cleanup", "playwright_stop", playwright.stop,
+                            )
                     except BaseException as exc:
                         cleanup_error = exc
+                        if not intentional_cancellation:
+                            if isinstance(exc, KeyboardInterrupt):
+                                annotate_keyboard_interrupt(exc)
+                                intentional_cancellation = True
+                                mark_cleanup_started()
+                            raise
                         if not isinstance(exc, KeyboardInterrupt):
                             logging.getLogger(__name__).error(
                                 "Playwright teardown failed during intentional "
@@ -5440,34 +5480,12 @@ class FlowSession:
                                 type(exc).__name__,
                             )
                     finally:
-                        self._observe_interrupted_disconnect_errors(interrupted_futures)
-                return
-            try:
-                if page_cdp_session is not None:
-                    try:
-                        if focus_emulation_enabled:
-                            page_cdp_session.send(
-                                "Emulation.setFocusEmulationEnabled",
-                                {"enabled": False},
-                            )
-                    except Exception:
-                        pass
-                    try:
-                        page_cdp_session.detach()
-                    except Exception:
-                        pass
+                        if intentional_cancellation:
+                            self._observe_interrupted_disconnect_errors(interrupted_futures)
             finally:
-                try:
-                    if browser is not None:
-                        # Browser.close() disconnects from this externally launched Chrome.
-                        browser.close()
-                finally:
-                    if playwright is not None:
-                        playwright.stop()
-        finally:
-            if intentional_cancellation:
                 asyncio_logger.removeFilter(teardown_filter)
-                mark_cleanup_completed(error=cleanup_error)
+                if intentional_cancellation:
+                    mark_cleanup_completed(error=cleanup_error)
 
     @contextmanager
     def generation_completion_checkpoint(self, checkpoint: Callable[[GenerationResult], None]):
