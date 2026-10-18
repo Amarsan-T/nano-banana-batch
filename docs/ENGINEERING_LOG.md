@@ -2424,3 +2424,39 @@ shutdown is not given a new finite wall-time guarantee. This correction prevents
 subsequent application cleanup RPCs after cancellation; it does not recover an
 unfinished generation, prove renderer responsiveness or support minimized Chrome.
 No private checkout, real run, prompt, image, profile or live Flow was accessed.
+
+## User-operated Ctrl+C recovery acceptance of 22e4dba (recorded 2026-10-17)
+
+The independent developer reported two successful user-operated live acceptance
+tests against published `22e4dba18b5815f4d23455be4021bad3782acee1`. The observations
+below are the developer's real-run evidence, distinct from automated offline
+regressions. Codex recorded the report without inspecting runtime artifacts or
+accessing Chrome, Google Flow or the private checkout.
+
+- **Test A — interruption before durable candidate ownership:** Ctrl+C printed
+  `Interrupted.` and the process exited 130 without an unhandled TargetClosedError.
+  Flow subsequently displayed the image. Resume remained blocked because durable
+  candidate ownership was absent, and no automatic duplicate submission occurred.
+- **Test B — interruption after the durable completion checkpoint:** for the
+  reported run `runs/ctrlc_checkpoint_test_01`, completed generation and one
+  candidate UUID were saved before Ctrl+C interrupted the process. Subsequent
+  Preview reported `generation: completed -> skip`,
+  `downloads: incomplete -> resume`, and `v01=download`. Real Resume reported
+  `generation=skipped_completed`, `downloads=downloaded`; the Order completed with
+  zero failures. The developer verified that the JPEG fully decoded through
+  Pillow at 1376×768. No candidate UUID value, prompt or image is included here.
+
+These observations provide live evidence for clean cancellation before ownership
+and download-only Resume after proven ownership was durably saved. They complement
+the previously recorded 1,363-test offline result; that suite was not rerun for
+this documentation-only update. Earlier entries' pending-live-acceptance statements
+describe their status when written; these two cases provide the subsequent
+evidence for the paths above, not every possible interruption boundary.
+
+Remaining limits: an acknowledged generation with missing or ambiguous durable
+ownership remains blocked, even if Flow later displays an image. Explicit Retry
+is a new potentially paid submission, not reconciliation of that image. Native-
+minimized Chrome operation remains unsupported. These successful cases do not
+establish all teardown timing boundaries, crash/power-loss recovery or a finite
+deadline for an in-flight SDK call or driver shutdown. No application code, tests,
+real run state, prompts, images or browser profiles were changed for this record.
