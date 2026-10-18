@@ -2502,3 +2502,85 @@ Native-minimized Chrome operation remains unsupported, and missing or ambiguous
 durable candidate ownership still blocks automatic reconciliation. No application
 code, tests, run states, images, prompts or browser profiles were changed, and
 Codex accessed neither the private checkout nor live Chrome/Flow for this record.
+
+## Stage 2 — transient sequential progress monitoring (2026-10-18)
+
+The independent developer reviewed the read-only architecture audit and explicitly
+approved implementation, offline verification and conditional publication. The
+approved decision keeps persisted run state authoritative for execution and
+recovery, with transient events supplying user visibility. Codex implemented the
+typed events, pure display reducer, bounded reporter, runner notifications, CLI
+rendering, focused regressions and README documentation. Earlier direct developer
+contributions and historical acceptance records remain unchanged.
+
+`nano_batch/progress.py` holds immutable phase events and snapshots, an
+invocation-scoped reporter and a 64-entry pending mailbox. Events contain bounded
+numeric facts, fixed phases, an Order-derived prompt identifier and allowlisted
+error codes. They carry no prompts, arbitrary visual IDs, candidate UUID values,
+paths, URLs, browser data or raw exception details. Existing ambiguity exceptions
+expose their fixed code through a message prefix rather than a `code` attribute;
+only that allowlisted prefix is retained, with attribution uncertainty remaining
+distinct from a confirmed generation failure.
+
+Sequential CLI/launcher execution adds append-only, flushed `PROGRESS` lines to
+human-readable stdout while retaining existing result lines, stderr errors,
+exit codes and recovery menus. Generation, saved ownership, skipped generation,
+downloads, receipt reconciliation, candidate persistence, Order finalization, authorized retries and
+terminal outcomes remain separate observations. Completion percentage counts
+validated, fully finalized Orders, not completed generations or estimated server
+work. Prior valid assets can contribute to Resume counts, but 100% is not proof
+of successful command exit. An interrupted active Order is displayed as stopped;
+the existing saved-state rules alone determine whether Resume or Retry is allowed.
+
+Checkpoint and same-session retry notifications perform in-memory work only;
+consumer output runs at outer execution boundaries. Queued notifications may be
+displayed later with their original monotonic recording time. Display/recording
+exceptions disable the affected reporting path without authorizing a retry or
+rewriting state. The first cancellation signal remains authoritative even when an
+output call returns normally or translates it into another exception. Cancellation
+cleanup issues no new progress output. A focused regression first reproduced a
+reused reporter retaining its old verified-count flag; beginning validation now
+clears that display flag until a new validated plan seeds the counts.
+
+Native Windows PowerShell 5.1 probes also reproduced informational stderr being
+wrapped as `NativeCommandError` and becoming terminating under
+`$ErrorActionPreference = 'Stop'` with merged/redirection output. The initial
+stderr routing was therefore changed to stdout without suppressing errors or
+changing shell preferences. The CLI routing regression failed before this
+one-line correction; a native strict-PowerShell regression complements the
+portable stream tests. This revises the audit's tentative stderr recommendation
+based on offline platform evidence, without changing execution semantics.
+
+No browser adapter, state model/store, download installer, ownership validator,
+cancellation module or launcher implementation changed. Structural AST comparison
+confirmed that existing runner/CLI function bodies remain equivalent after
+removing progress notification/wiring statements; the original sequential body is
+called through a small reporting scope. Enabled/disabled regression comparisons
+also preserve adapter call sequences and saved results. No new browser calls,
+state fields, polling, threads, timers, persistent telemetry files or GUI were
+introduced. Only disposable synthetic fixtures were used; no existing real runs,
+prompts, images, profiles, private checkout or live Chrome/Flow were accessed.
+
+Limitations: progress reports coarse transitions and can remain unchanged during
+a blocking SDK call. It is not a heartbeat, exact generation percentage or ETA.
+Outer terminal writes can still block on a slow stream. The mailbox belongs to
+the automation thread; a future GUI needs a separate queue bridge. Progress
+validation is evidence at existing checks, not continuous filesystem validation.
+Existing single-writer, filesystem/provider, ambiguous ownership and unsupported
+native-minimized Chrome limitations remain. Real acceptance of this progress
+presentation is still pending; earlier user-reported live acceptance is not
+reclassified as testing this change.
+
+Validation: 40 focused progress regressions passed in 19.073 seconds, including
+native Windows PowerShell 5.1 strict redirection, cancellation at durable
+checkpoints, mixed and skip-only Resume, ownership conflicts, canonical-only
+receipt recovery, retry authorization, bounded buffering and privacy. A broader
+cancellation/runner/launcher/retry/recovery selection passed 345 tests before the
+final PowerShell routing correction. The complete final offline suite passed
+1,403 tests in 277.549 seconds, with zero failures, errors or skips. SHA-256
+snapshots of all 67 source/test Python files matched before and after that run.
+The preceding 1,402-test full pass predates the final stream correction and its
+additional native regression; the 1,403-test result is the publication evidence.
+All four publication-security checks, Python compilation, three embedded observer
+JavaScript syntax checks and Git whitespace checks passed. No existing regression
+was removed or weakened. Real Flow acceptance was deliberately not performed.

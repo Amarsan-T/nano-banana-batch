@@ -23,6 +23,7 @@ from nano_batch.launcher import (
     run_launcher,
 )
 from nano_batch.power import windows_execution_state_guard
+from nano_batch.progress import ProgressReporter, terminal_progress
 from nano_batch.runner import (
     dry_run,
     execute_download_one,
@@ -339,6 +340,7 @@ def _run_sequential_command(
 
     while True:
         try:
+            progress = ProgressReporter(tuple(item.order for item in batch.items), terminal_progress(sys.stdout))
             with authoritative_cancellation_scope():
                 with windows_execution_state_guard(enabled=isinstance(adapter, FlowSession)):
                     final_state, outcomes = interruptible_call(
@@ -351,6 +353,7 @@ def _run_sequential_command(
                         order_completed=report_completed,
                         policy_retry_event=_report_policy_retry_event,
                         manage_flow_project=isinstance(adapter, FlowSession),
+                        progress=progress,
                     )
             break
         except PolicyGenerationRejected as exc:

@@ -61,6 +61,10 @@ from .models import (
     RunState,
 )
 from .state import RunStateStore
+from .progress import (
+    ProgressPhase, ProgressReporter, flush_progress, progress_scope,
+    record_progress, seed_progress,
+)
 
 
 _AUTOMATIC_GENERIC_FAILURE_RETRY_LIMIT = 2
@@ -1085,6 +1089,7 @@ def _persist_download_completion(
     item.output_files = completed_item.output_files
     state.updated_at = completed.updated_at
     state.version = completed.version
+    record_progress(ProgressPhase.CANDIDATE_SAVED, order=item.order, variant=candidate.variant)
 
 
 def _reconcile_pending_downloads(batch: Batch, run_dir: Path, plan: DownloadPlan) -> DownloadPlan:
@@ -1571,6 +1576,8 @@ def execute_download_one(
     """Download and persist candidates one at a time without changing generation status."""
     plan = plan_download_one(batch, run_dir, order, overwrite=overwrite)
     if any(candidate.action == "recover_pending" for candidate in plan.candidates):
+        record_progress(ProgressPhase.RECONCILE, order=order)
+        flush_progress()
         plan = _reconcile_pending_downloads(batch, run_dir, plan)
     state = plan.state
     state_item = plan.item
@@ -1624,6 +1631,8 @@ def execute_download_one(
             state.updated_at = utc_now()
             store.save(state)
             try:
+                record_progress(ProgressPhase.DOWNLOAD, order=order, variant=candidate.variant)
+                flush_progress()
                 _assert_current_download_file_claims(
                     state, state_item, candidate, run_dir, candidate_plan.destination, staged_path,
                     allow_selected_output=candidate_plan.action == "overwrite",
@@ -1863,6 +1872,7 @@ def execute_one(
         state_item.generation_error_code = None
         state.updated_at = state_item.started_at
         store.save(state)
+        record_progress(ProgressPhase.RETRY, order=requested.order, attempt=state_item.attempt_count, code=FLOW_POLICY_REJECTED)
         if policy_retry_event is not None:
             policy_retry_event(requested.order, "automatic_retry_started")
         return True
@@ -1891,6 +1901,7 @@ def execute_one(
         state.updated_at = state_item.started_at
         store.save(state)
         unusual_retry_started = True
+        record_progress(ProgressPhase.RETRY, order=requested.order, attempt=state_item.attempt_count, code="FLOW_UNUSUAL_ACTIVITY")
 
     def authorize_generic_failure_retry(
         exc: GenericGenerationFailure,
@@ -1930,6 +1941,7 @@ def execute_one(
         state_item.generation_error_code = None
         state.updated_at = state_item.started_at
         store.save(state)
+        record_progress(ProgressPhase.RETRY, order=requested.order, attempt=state_item.attempt_count, code=FLOW_GENERIC_GENERATION_FAILED)
         return True
 
     completion_persistence_started = False
@@ -1992,6 +2004,8 @@ def execute_one(
         state_item.completed_at = utc_now()
         state.updated_at = state_item.completed_at
         store.save(state)
+
+        record_progress(ProgressPhase.GENERATION_SAVED, order=requested.order, attempt=state_item.attempt_count)
 
     try:
         checkpoint_factory = getattr(type(adapter), "generation_completion_checkpoint", None)
@@ -2182,6 +2196,7 @@ def _authorize_automatic_policy_retry(
     state_item.automatic_policy_retry_count = 1
     state.updated_at = utc_now()
     store.save(state)
+    record_progress(ProgressPhase.RETRY, order=item.order, code=FLOW_POLICY_REJECTED)
 
 
 def _authorize_automatic_generic_failure_retry(
@@ -2203,6 +2218,7 @@ def _authorize_automatic_generic_failure_retry(
     state_item.automatic_generic_failure_retry_count += 1
     state.updated_at = utc_now()
     store.save(state)
+    record_progress(ProgressPhase.RETRY, order=item.order, code=FLOW_GENERIC_GENERATION_FAILED)
 
 
 def _execute_generation_with_policy_retry(
@@ -2390,6 +2406,30 @@ def execute_sequential_batch(
     order_completed=None,
     policy_retry_event: Callable[[int, str], None] | None = None,
     manage_flow_project: bool = False,
+    progress: ProgressReporter | None = None,
+) -> tuple[RunState, tuple[SequentialOrderOutcome, ...]]:
+    """Report transient progress around the unchanged sequential execution path."""
+    with progress_scope(progress):
+        record_progress(ProgressPhase.VALIDATING)
+        flush_progress()
+        return _execute_sequential_batch(
+            batch, run_dir, adapter, settings,
+            retry_failed_generation=retry_failed_generation,
+            order_completed=order_completed, policy_retry_event=policy_retry_event,
+            manage_flow_project=manage_flow_project,
+        )
+
+
+def _execute_sequential_batch(
+    batch: Batch,
+    run_dir: Path,
+    adapter: SequentialBatchAdapter,
+    settings: GenerationSettings,
+    *,
+    retry_failed_generation: bool,
+    order_completed,
+    policy_retry_event: Callable[[int, str], None] | None,
+    manage_flow_project: bool,
 ) -> tuple[RunState, tuple[SequentialOrderOutcome, ...]]:
     """Process validated batch order sequentially via the proven one-order paths."""
     plan = plan_sequential_batch(
@@ -2398,12 +2438,24 @@ def execute_sequential_batch(
         settings,
         retry_failed_generation=retry_failed_generation,
     )
+    seed_progress(tuple(
+        (entry.order,
+         "completed" if entry.generation_action == "skip_completed"
+         and entry.download_action == "skip_valid" and entry.download_status == "completed" else
+         "waiting" if entry.generation_status == WAITING_FOR_FLOW_LIMIT_RESET else
+         "failed_or_blocked" if entry.generation_action == "blocked_retry_required"
+         or entry.download_status == "failed" else "pending")
+        for entry in plan.orders
+    ))
+    flush_progress()
     blocked = [
         order
         for order in plan.orders
         if order.generation_action == "blocked_retry_required"
     ]
     if blocked:
+        for entry in blocked:
+            record_progress(ProgressPhase.BLOCKED, order=entry.order)
         blocked_orders = ", ".join(str(order.order) for order in blocked)
         raise ValueError(
             f"Generation retry required for order(s) {blocked_orders}; "
@@ -2417,6 +2469,8 @@ def execute_sequential_batch(
             # their configured-project behavior without guessing or mutation here.
             pass
         else:
+            record_progress(ProgressPhase.PROJECT)
+            flush_progress()
             _prepare_sequential_flow_project(batch, run_dir, adapter, settings)
 
     outcomes: list[SequentialOrderOutcome] = []
@@ -2435,6 +2489,7 @@ def execute_sequential_batch(
 
         if state_item.status == "completed":
             generation_outcome = "skipped_completed"
+            record_progress(ProgressPhase.SKIP_GENERATION, order=item.order)
         else:
             cancellation_checkpoint("generation_dispatch")
             was_retry = state_item.status in {"failed", "running"}
@@ -2448,6 +2503,8 @@ def execute_sequential_batch(
             resume_generic_retry = automatic_generic_failure_retry_available(
                 state_item
             )
+            record_progress(ProgressPhase.GENERATION, order=item.order)
+            flush_progress()
             generation_outcome = _execute_generation_with_automatic_retries(
                 batch,
                 run_dir,
@@ -2471,6 +2528,8 @@ def execute_sequential_batch(
                 policy_retry_event=policy_retry_event,
             )
 
+        record_progress(ProgressPhase.VERIFYING, order=item.order)
+        flush_progress()
         download_plan = plan_download_one(batch, run_dir, item.order)
         pending_downloads = [
             candidate
@@ -2487,6 +2546,8 @@ def execute_sequential_batch(
             download_outcome = "skipped_valid"
         else:
             cancellation_checkpoint("download_dispatch")
+            record_progress(ProgressPhase.DOWNLOAD, order=item.order)
+            flush_progress()
             execute_download_one(batch, run_dir, item.order, adapter)
             download_outcome = "resumed" if previously_completed or any(
                 candidate.action == "recover_pending" for candidate in pending_downloads
@@ -2513,6 +2574,8 @@ def execute_sequential_batch(
             downloads=download_outcome,
         )
         outcomes.append(outcome)
+        record_progress(ProgressPhase.COMPLETE, order=item.order)
+        flush_progress()
         if order_completed is not None:
             order_completed(outcome)
 

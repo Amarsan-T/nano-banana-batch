@@ -293,8 +293,55 @@ protection remain authoritative. Diagnostic keys/types and the v1 schema are
 unchanged; consumers must allow this additional signal string.
 Set top-level `"prestart_timing_debug": true` in `config.json` to print concise
 `PRE-START TIMING` and `POST-START ACK TIMING` summaries during an intentional
-production diagnostic; the default is `false`, so normal launcher output remains
-unchanged.
+production diagnostic; the default is `false`, so these timing summaries remain
+opt-in.
+
+## Sequential batch progress
+
+Launcher batches and the sequential `run-batch`, `run-prompt`, and
+`run-prompts-file` commands now add plain `PROGRESS` lines to their human-readable
+stdout output. Existing result lines are retained; stderr keeps existing errors
+and warnings. Progress uses stdout because Windows PowerShell 5.1 can convert
+informational stderr into a terminating error under strict error handling.
+Lines are informational, newline-terminated and flushed;
+they require no ANSI support or interactive terminal. Preview remains read-only
+and does not start the live progress reporter. Standalone `generate-one` and
+`download-one` keep their existing output.
+
+Each line identifies the phase, invocation-local event number and elapsed
+milliseconds. Order lines include the actual Order number, its position in the
+batch, and an `order-0007` identifier rather than prompt text. Phases distinguish
+generation/waiting, saved generation, skipped generation, downloading, pending
+receipt reconciliation, saved candidates, and finalized Orders. No phase claims
+Start acknowledgement or Flow's internal percentage. Automatic-retry events
+describe existing durable authorizations; they do not grant another retry.
+
+Counts become verified only after the existing ownership/asset planning checks
+succeed. `percent` is the integer percentage of validated, fully finalized Orders,
+including valid work from earlier invocations. Completed generation with unfinished
+downloads is not a completed Order. Counts partition the batch into `pending`,
+`active`, `completed`, `waiting`, `failed_or_blocked`, and `stopped` (interrupted
+active work). These are display states, not new saved statuses or recovery rules.
+In particular, failed downloads may still be normally resumable. `100%` and
+`orders_finalized` do not prove command exit success; existing errors, `Interrupted.`
+and exit codes remain authoritative.
+
+Progress is transient, with at most 64 pending snapshots. Checkpoints record in
+memory only; terminal output occurs at outer execution boundaries. Saved-result,
+candidate and same-session retry notifications can therefore appear after the
+browser call returns, carrying their original recording time. There is no ETA,
+continuous timer, additional browser polling, or state-file watcher. A long-running
+call can leave the last phase unchanged. Progress does not prove browser liveness.
+Output failures disable this reporter without changing retry or ownership logic;
+a blocked output stream can still delay an outer print. Ctrl+C retains its first
+signal and existing recovery handling, without fresh progress output during
+cancellation cleanup. Missing notifications do not prove an action did not occur.
+
+The immutable events and pure display reducer in `nano_batch/progress.py` are
+independent of browser automation. The mailbox belongs to the automation thread;
+a future GUI bridge must enqueue drained snapshots for its own UI thread.
+Run state and the existing validated Resume plan remain the recovery authority.
+No GUI, telemetry file, new state fields, or browser instrumentation is introduced.
 
 ## Safe first real-prompt sequence
 
