@@ -2460,3 +2460,45 @@ minimized Chrome operation remains unsupported. These successful cases do not
 establish all teardown timing boundaries, crash/power-loss recovery or a finite
 deadline for an in-flight SDK call or driver shutdown. No application code, tests,
 real run state, prompts, images or browser profiles were changed for this record.
+
+## User-operated 20-image soak acceptance of 704c5d2 (recorded 2026-10-17)
+
+The independent developer reported a successful live 20-Order sequential soak
+test against published `704c5d29d254cebedd0903866b43a58f6bf83c76`, using Google Flow,
+Nano Banana 2.1, Image mode, 16:9 and x1. This entry records the developer's
+observations; Codex did not repeat the live test or independently inspect the
+run state, prompt file or images. Runtime artifacts remain outside version control.
+
+Reported input and run references:
+
+- Run: `runs/soak_20_704c5d2_20261017_01`.
+- Prompt file: `prompts_soak_20_704c5d2_20261017_01.txt`.
+- Batch ID: `sha256:f3ed7360279f129110c17a5fdc780fddb17d0653b9cf1bf2886988a27ea4cceb`.
+
+Reported acceptance results:
+
+- **Initial run:** 20 Orders were accepted. Orders 1–20 each reported
+  `generation=generated, downloads=downloaded`. Sequential execution finished
+  with Completed: 20, Failed: 0 and exit code 0. All 20 canonical asset paths were
+  reported; their private absolute paths are not reproduced here.
+- **JPEG validation:** the developer separately ran a Pillow validation script
+  and reported that it passed: exactly 20 JPEG files, full decoding, JPEG format,
+  1376×768 resolution and no duplicate SHA-256 image hashes. This is user-reported
+  validation, not independent file inspection by Codex.
+- **Resume Preview:** all 20 Orders reported `generation: completed -> skip`,
+  `downloads: complete and valid -> skip`, and `candidates: v01=skip_valid`.
+  No generation or downloads occurred during Preview.
+- **Actual Resume:** with the same prompt file and run directory, all 20 Orders
+  reported `COMPLETE (generation=skipped_completed, downloads=skipped_valid)`.
+  Results were Completed: 20, Failed: 0 and exit code 0, with no repeated generation
+  or downloads reported.
+
+This is evidence of one successful 20-Order run and completed-run Resume under the
+reported settings, not a guarantee of reliability at arbitrary scale or in longer
+sessions. It is distinct from the previously recorded 1,363-test offline suite;
+that full suite was not rerun for this documentation-only entry. This successful
+soak does not establish new crash, power-loss or interruption-boundary coverage.
+Native-minimized Chrome operation remains unsupported, and missing or ambiguous
+durable candidate ownership still blocks automatic reconciliation. No application
+code, tests, run states, images, prompts or browser profiles were changed, and
+Codex accessed neither the private checkout nor live Chrome/Flow for this record.
