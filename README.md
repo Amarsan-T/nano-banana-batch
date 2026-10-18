@@ -296,6 +296,55 @@ Set top-level `"prestart_timing_debug": true` in `config.json` to print concise
 production diagnostic; the default is `false`, so these timing summaries remain
 opt-in.
 
+## Preview-only Windows GUI
+
+Stage 4B adds a separate Tkinter/ttk window. From the project directory, launch it
+with the existing environment (Python must include Tcl/Tk):
+
+```powershell
+.\.venv\Scripts\python.exe gui.py
+```
+
+Chrome does not need to be running for Preview.
+
+1. Click **Choose file...** and select an existing UTF-8 prompt text file.
+2. For **New run (not created)**, enter a fresh folder path beneath an existing
+   parent directory. No folder is created. To inspect saved work instead, click
+   **Open existing run...** and select its folder containing `run_state.json`.
+3. Click **Preview**. The existing planner validates the selected input, saved
+   ownership and applicable canonical assets without browser interaction.
+4. Review total Orders, completed Orders, pending work, download-only Resume,
+   finalization-pending, waiting, blocked and existing automatic-retry eligibility.
+   These are planned actions, not actions performed by the GUI.
+
+**Start / Resume and Stop are disabled and have no execution callbacks.** GUI
+execution, downloads, Chrome launching, active-run cancellation and worker-process
+orchestration are not implemented. Preview consumes no generation credits and
+does not create or repair state, change prompts, reconcile receipts, or modify
+assets. The existing CLI and `run.bat` workflows remain unchanged.
+
+The GUI uses the existing x1 prompt-file parser and Image/16:9 defaults; it does
+not read private `config.json` or change Flow settings. It accepts prompt text,
+not external batch JSON. Use the existing CLI and original batch for external
+x2 runs; the GUI does not guess their semantic identity from a text file.
+
+Validation and input/state fingerprint checks run on one read-only background
+thread, returning only sanitized plan labels through a bounded queue. Counts are
+computed there; the table displays at most 100 Orders per page. Input-field edits
+clear the plan immediately. After validation, nominal one-second background checks
+rehash the prompt file and saved state; detected changes clear the displayed plan
+and require another Preview. A busy filesystem can delay detection. Asset integrity
+is checked during Preview, not continuously monitored. These checks are snapshots,
+not locks or authorization for future execution; concurrent writers and filesystem
+races remain unsupported.
+
+Only your explicitly selected paths appear in the input fields. Plan rows show
+numeric Orders and fixed labels without prompt text, candidate UUIDs or URLs.
+Errors use fixed guidance rather than raw exceptions; no GUI diagnostic log is
+written. Real Tk widgets, responsiveness and read-only behavior are tested with
+synthetic offline fixtures. This is not live Flow acceptance or a packaged Windows
+distribution.
+
 ## Sequential batch progress
 
 Launcher batches and the sequential `run-batch`, `run-prompt`, and

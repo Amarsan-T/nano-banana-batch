@@ -2644,3 +2644,69 @@ JavaScript syntax checks and Git whitespace checks passed. The existing detailed
 CLI test now opts into detailed mode; its assertions remain intact, with new
 regressions separately checking the simple default. Stage 3 live acceptance
 remains pending.
+
+## 2026-10-18 — Stage 4B preview-only Windows GUI
+
+The independent developer approved the Stage 4A architecture audit and authorized
+the preview-only first deliverable, with real execution, browser launch, Stop and
+worker-process orchestration explicitly excluded. Codex implemented the separate
+`gui.py` entry point, Tkinter/ttk presentation, read-only preview service, bounded
+thread controller, synthetic regressions and README instructions. Existing direct
+developer contributions and earlier engineering history remain unchanged.
+
+The GUI loads the exact existing x1 prompt-file parser and delegates planning to
+`plan_sequential_batch()` with Image/16:9/x1 defaults. It imports no browser adapter
+and exposes no execution interface. Neither the existing CLI, launcher, runner,
+state models/store, browser adapter, download installer nor recovery policy changed.
+No dependency or persisted-state field was added. External batch JSON/x2 execution
+remains a CLI workflow; x2 projection regressions verify that partial candidate
+downloads do not count as completed Orders, without guessing a text-file identity.
+
+One daemon thread performs only read-only planning and fingerprint checks. Its
+request and sanitized result queues each hold at most one item, and invocation
+revisions discard superseded results. Widgets, file dialogs and queue consumption
+remain on the GUI main thread. Counts are computed off-thread and pagination caps
+rendering at 100 Orders. Start/Resume and Stop are disabled without callbacks.
+Closing the window stops preview monitoring without waiting for a blocked file read;
+there is no active generation or state mutation to cancel.
+
+Prospective run folders must be fresh beneath an existing parent; existing-run
+selection requires saved state. File selection and Preview create neither folder
+nor state. Completed assets, download-only work, blocked generations, usage-limit
+waiting, pending receipts and interrupted finalization retain the existing planner
+decisions. No preview normalizes state, consumes retry budgets, adopts an orphan
+asset or reconciles a pending receipt. Messages and table rows exclude prompt text,
+visual IDs, candidate UUIDs, URLs, raw errors and private paths. User-selected paths
+remain visible only in the input fields; no GUI log is saved.
+
+Input edits immediately clear displayed results. Content/identity fingerprints
+before and after planning reject detected concurrent changes; after plan display,
+nominal one-second background checks invalidate changed prompt/state evidence.
+Hashes detect changed content even when file size and mtime are preserved. These
+checks provide no filesystem lock, instantaneous change notification or future
+execution permission. Canonical assets are validated at Preview time, not watched
+continuously. A blocked filesystem read may delay checks, while the GUI remains
+responsive. Existing concurrency, provider and filesystem-race limitations remain.
+
+Focused tests exposed a duplicate Tk `after` scheduling path during repeated poll
+entry; the poll now retains one callback and cancels it on close. The failing
+waiting-state fixture was also corrected to include the existing required usage-
+limit error code; production validation was preserved. No existing tests were
+removed or weakened. Tk testing uses synthetic fixtures and withdrawn windows,
+without desktop screenshots or inspecting real prompts, images, profiles, runs,
+Chrome, Flow or the private checkout. GUI execution and live acceptance remain
+excluded: real batch execution through the GUI is not implemented, and no live
+Flow acceptance was performed.
+
+Validation: 52 focused GUI tests passed in 10.903 seconds, including real Tk
+startup/close, main-thread rendering and responsiveness, Unicode/space-containing
+paths, stale-input invalidation, safe errors and a subprocess audit rejecting
+writes, network activity and process launch during Preview. A broader selection
+of GUI, CLI, runner, launcher, progress, recovery and confinement regressions passed
+347 tests in 146.543 seconds. The complete offline suite passed 1,487 tests in
+333.760 seconds with no failures or skips. All 73 Python source/test files matched
+the hashes captured before that full run. Four publication-security tests, Python
+compilation (including `gui.py`), three unchanged embedded observer JavaScript
+syntax checks and Git whitespace checks passed. All existing tracked Python files
+remain unchanged. A synthetic 5,000-Order layout probe rendered only 100 rows and
+fit the default window dimensions; it provides offline layout evidence only.
