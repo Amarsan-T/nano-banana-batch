@@ -23,7 +23,7 @@ from nano_batch.launcher import (
     run_launcher,
 )
 from nano_batch.power import windows_execution_state_guard
-from nano_batch.progress import ProgressReporter, terminal_progress
+from nano_batch.progress import ProgressReporter, simple_terminal_progress, terminal_progress
 from nano_batch.runner import (
     dry_run,
     execute_download_one,
@@ -340,7 +340,11 @@ def _run_sequential_command(
 
     while True:
         try:
-            progress = ProgressReporter(tuple(item.order for item in batch.items), terminal_progress(sys.stdout))
+            progress_output = (
+                terminal_progress(sys.stdout) if getattr(args, "progress_format", "simple") == "detailed"
+                else simple_terminal_progress(sys.stdout, variants=settings.variants)
+            )
+            progress = ProgressReporter(tuple(item.order for item in batch.items), progress_output)
             with authoritative_cancellation_scope():
                 with windows_execution_state_guard(enabled=isinstance(adapter, FlowSession)):
                     final_state, outcomes = interruptible_call(
@@ -485,6 +489,7 @@ def cmd_launcher(args: argparse.Namespace) -> int:
                     debug_address=args.debug_address,
                     debug_port=args.debug_port,
                     _launcher=True,
+                    progress_format=getattr(args, "progress_format", "simple"),
                 )
             )
         except Exception as exc:
@@ -1268,6 +1273,13 @@ def cmd_probe_download_ui(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_progress_format_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--progress-format", choices=("simple", "detailed"), default="simple",
+        help="Progress display: simple milestones (default), or detailed Stage 2 events.",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="nano-banana-batch",
@@ -1309,6 +1321,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
     p.add_argument("--debug-port", type=int)
+    _add_progress_format_argument(p)
     p.set_defaults(func=cmd_run_batch)
 
     p = sub.add_parser(
@@ -1329,6 +1342,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
     p.add_argument("--debug-port", type=int)
+    _add_progress_format_argument(p)
     p.set_defaults(func=cmd_run_prompt)
 
     p = sub.add_parser(
@@ -1349,6 +1363,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
     p.add_argument("--debug-port", type=int)
+    _add_progress_format_argument(p)
     p.set_defaults(func=cmd_run_prompts_file)
 
     p = sub.add_parser(
@@ -1360,6 +1375,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
     p.add_argument("--debug-port", type=int)
+    _add_progress_format_argument(p)
     p.set_defaults(func=cmd_launcher)
 
     p = sub.add_parser("status", help="Show persisted state for a batch.")

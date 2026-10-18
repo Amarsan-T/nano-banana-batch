@@ -2584,3 +2584,63 @@ additional native regression; the 1,403-test result is the publication evidence.
 All four publication-security checks, Python compilation, three embedded observer
 JavaScript syntax checks and Git whitespace checks passed. No existing regression
 was removed or weakened. Real Flow acceptance was deliberately not performed.
+
+## 2026-10-18 — Stage 2 live acceptance and Stage 3 readable CLI progress
+
+The independent developer reported a successful user-operated two-image acceptance
+test of Stage 2 at `7319f2c`. Both sequential Orders generated and downloaded;
+events followed generation, durable generation save, download, candidate save and
+Order completion. Completion advanced from 0% to 50% to 100%, with two completed,
+zero failed, exit code 0 and approximately 84.6 seconds of runtime. Codex did not
+repeat this live run or inspect its private runtime artifacts. This is
+user-observed Stage 2 acceptance evidence, not a live test of Stage 3.
+
+The developer approved a simple default presentation with explicit access to the
+detailed Stage 2 events. Codex added a presentation-only renderer and
+`--progress-format simple|detailed` for sequential CLI commands and the launcher.
+The default emits append-only ASCII milestones to stdout, avoiding ANSI controls
+and informational stderr that can disrupt strict Windows PowerShell 5.1 pipelines.
+Existing Order summaries, errors, exit codes and recovery menus remain in place.
+Detailed mode retains the original event formatter unchanged.
+
+Generation saved and full Order completion remain distinct. Resume distinguishes
+already complete work from saved generation awaiting downloads; x2 candidate
+milestones do not advance Order completion. Usage-limit waiting, existing retry
+authorizations and uncertain ownership receive fixed wording without printing
+prompts, candidate UUIDs, private paths or raw exceptions. Duplicate download
+notices and internal verification events are hidden only in the simple terminal
+view; typed events, reducer and bounded mailbox are unchanged. Terminal reporting
+remains best-effort through the existing reporter, including first-signal
+cancellation behavior and output-failure isolation.
+
+No runner, browser adapter, persisted-state model/store, ownership validator,
+download pipeline, cancellation or launcher implementation changed. CLI wiring
+selects the renderer and forwards the display option without changing execution
+policy. No browser calls, polling, timers, state fields, dependencies or GUI were
+added. All new fixtures are disposable and synthetic; no existing run, prompt,
+image, profile, private checkout or live Flow session was accessed.
+
+Limitations: Stage 3 has not been live-tested. Milestones remain coarse and may be
+delayed until an existing outer flush point; they are not a heartbeat, exact
+generation percentage or ETA. Completion counts fully finalized Orders, and
+`All orders complete` does not guarantee successful command exit or teardown.
+Existing final summaries and exit codes remain authoritative. A slow output pipe
+can delay terminal writes. Native minimized Chrome remains unsupported, and
+ambiguous ownership remains protected by the existing Resume/Retry rules.
+
+Validation: the broader cancellation/runner/CLI/launcher/retry/recovery selection
+passed 379 tests in 171.163 seconds, including all 72 progress tests (32 new
+Stage 3 regressions). Coverage includes simple and detailed output, mixed/skip-only/
+download-only Resume, partial x2 completion, canonical-only reconciliation,
+ownership conflicts, usage-limit waiting, durable retry accounting, privacy,
+output failures and first-signal cancellation. Native Windows PowerShell 5.1
+strict merged-output redirection passed for both formats. The complete final
+offline suite passed 1,435 tests in 288.924 seconds, with zero failures, errors or
+skips. All 68 source/test Python file hashes matched the full-suite snapshot.
+Structural AST comparison confirmed unchanged existing progress definitions and
+CLI behavior apart from presentation selection/argument wiring. All four
+publication-security checks, Python compilation, three existing observer
+JavaScript syntax checks and Git whitespace checks passed. The existing detailed
+CLI test now opts into detailed mode; its assertions remain intact, with new
+regressions separately checking the simple default. Stage 3 live acceptance
+remains pending.

@@ -519,7 +519,7 @@ class ProgressRunnerTests(unittest.TestCase):
 
     def test_cli_writes_progress_to_stdout_and_preview_stays_read_only(self):
         args = argparse.Namespace(run_dir=str(self.run_dir), config=str(self.root / "absent.json"),
-                                  timeout=None, retry=False, preview=False)
+                                  timeout=None, retry=False, preview=False, progress_format="detailed")
         for preview in (True, False):
             args.preview = preview
             with patch.object(app, "_flow_session_from_args", return_value=self.adapter) as factory, \

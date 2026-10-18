@@ -299,8 +299,8 @@ opt-in.
 ## Sequential batch progress
 
 Launcher batches and the sequential `run-batch`, `run-prompt`, and
-`run-prompts-file` commands now add plain `PROGRESS` lines to their human-readable
-stdout output. Existing result lines are retained; stderr keeps existing errors
+`run-prompts-file` commands show simple progress milestones on stdout by default.
+Existing result lines are retained; stderr keeps existing errors
 and warnings. Progress uses stdout because Windows PowerShell 5.1 can convert
 informational stderr into a terminating error under strict error handling.
 Lines are informational, newline-terminated and flushed;
@@ -308,9 +308,38 @@ they require no ANSI support or interactive terminal. Preview remains read-only
 and does not start the live progress reporter. Standalone `generate-one` and
 `download-one` keep their existing output.
 
-Each line identifies the phase, invocation-local event number and elapsed
-milliseconds. Order lines include the actual Order number, its position in the
-batch, and an `order-0007` identifier rather than prompt text. Phases distinguish
+For a two-Order batch, progress includes lines such as:
+
+```text
+[1/2] Generating image...
+[1/2] Generation saved. Preparing download...
+[1/2] Downloading image...
+[1/2] Complete - 1/2 (50%)
+[2/2] Generating image...
+...
+[2/2] Complete - 2/2 (100%)
+All orders complete: 2/2 (100%)
+```
+
+The default shows Order position, phase and completed-Order counts at milestones,
+without prompt text. Download-only Resume says generation is already saved;
+skip-only Resume reports validated completion without claiming new generation or
+downloads. x2 batches show individual candidate downloads while counting the Order
+complete only after both are finalized. Waiting and blocked messages preserve the
+existing recovery rules; they never authorize a new submission.
+
+For the detailed Stage 2 event lines, select `--progress-format detailed`:
+
+```powershell
+python app.py run-prompts-file prompts.txt --run-dir runs/example --progress-format detailed
+python app.py launcher --progress-format detailed
+```
+
+The option also works with `run-batch` and `run-prompt`; `--progress-format simple`
+explicitly selects the default. `run.bat` uses the simple default. Detailed lines
+start with `PROGRESS` and identify the phase, invocation-local event number and
+elapsed milliseconds. Order lines include the actual Order number, its position
+in the batch, and an `order-0007` identifier rather than prompt text. Phases distinguish
 generation/waiting, saved generation, skipped generation, downloading, pending
 receipt reconciliation, saved candidates, and finalized Orders. No phase claims
 Start acknowledgement or Flow's internal percentage. Automatic-retry events
@@ -319,17 +348,20 @@ describe existing durable authorizations; they do not grant another retry.
 Counts become verified only after the existing ownership/asset planning checks
 succeed. `percent` is the integer percentage of validated, fully finalized Orders,
 including valid work from earlier invocations. Completed generation with unfinished
-downloads is not a completed Order. Counts partition the batch into `pending`,
+downloads is not a completed Order. Detailed mode partitions the batch into `pending`,
 `active`, `completed`, `waiting`, `failed_or_blocked`, and `stopped` (interrupted
 active work). These are display states, not new saved statuses or recovery rules.
-In particular, failed downloads may still be normally resumable. `100%` and
-`orders_finalized` do not prove command exit success; existing errors, `Interrupted.`
+In particular, failed downloads may still be normally resumable. `100%`,
+`All orders complete`, and detailed `orders_finalized` report Order completion,
+not command exit success; existing errors, `Interrupted.`
 and exit codes remain authoritative.
 
 Progress is transient, with at most 64 pending snapshots. Checkpoints record in
 memory only; terminal output occurs at outer execution boundaries. Saved-result,
 candidate and same-session retry notifications can therefore appear after the
-browser call returns, carrying their original recording time. There is no ETA,
+browser call returns; detailed mode includes their original recording time.
+Simple mode hides internal verification events and duplicate download notices;
+the underlying typed events remain available unchanged. There is no ETA,
 continuous timer, additional browser polling, or state-file watcher. A long-running
 call can leave the last phase unchanged. Progress does not prove browser liveness.
 Output failures disable this reporter without changing retry or ownership logic;

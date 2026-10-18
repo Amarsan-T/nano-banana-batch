@@ -179,6 +179,108 @@ def terminal_progress(stream: TextIO) -> Callable[[ProgressSnapshot], None]:
     return write
 
 
+def format_simple_progress(snapshot: ProgressSnapshot, *, variants: int = 1) -> str | None:
+    """Describe existing observations without inferring submission or recovery rights."""
+    event = snapshot.event
+    phase = event.phase
+    total = len(snapshot.orders)
+    counts = snapshot.counts
+    completion = (
+        f"{counts['completed']}/{total} ({snapshot.percent}%)"
+        if snapshot.verified and snapshot.percent is not None else "not yet verified"
+    )
+    positions = {order: index for index, (order, _) in enumerate(snapshot.orders, 1)}
+    position = positions.get(event.order) if type(event.order) is int else None
+    prefix = f"[{position}/{total}] " if position is not None else ""
+    if position is not None and event.order != position:
+        prefix += f"Order {event.order}: "
+
+    if phase == ProgressPhase.VALIDATING:
+        return "Checking saved state and assets..."
+    if phase == ProgressPhase.READY:
+        return f"Batch: {total} {'order' if total == 1 else 'orders'}. Completed: {completion}."
+    if phase == ProgressPhase.PROJECT:
+        return "Preparing Flow project..."
+    if phase == ProgressPhase.GENERATION:
+        message = "Generating 2 images..." if variants == 2 else "Generating image..."
+    elif phase == ProgressPhase.GENERATION_SAVED:
+        message = "Generation saved. Preparing downloads..." if variants == 2 else "Generation saved. Preparing download..."
+    elif phase == ProgressPhase.SKIP_GENERATION:
+        message = (
+            "Already complete; validating saved downloads..."
+            if snapshot.verified and dict(snapshot.orders).get(event.order) == "completed" else
+            "Generation already saved. Checking remaining downloads (no new generation)..."
+        )
+    elif phase == ProgressPhase.DOWNLOAD:
+        if variants == 2:
+            if event.variant not in (1, 2):
+                return None
+            message = f"Downloading candidate {event.variant}/2..."
+        else:
+            message = "Downloading image..."
+    elif phase == ProgressPhase.RECONCILE:
+        message = "Checking interrupted download; no new generation..."
+    elif phase == ProgressPhase.CANDIDATE_SAVED:
+        if variants != 2 or event.variant not in (1, 2):
+            return None
+        message = f"Candidate {event.variant}/2 saved; checking Order completion..."
+    elif phase == ProgressPhase.COMPLETE:
+        message = f"Complete - {completion}"
+    elif phase == ProgressPhase.RETRY:
+        reason = {
+            "FLOW_POLICY_REJECTED": "policy rejection",
+            "FLOW_GENERIC_GENERATION_FAILED": "generation failure",
+            "FLOW_UNUSUAL_ACTIVITY": "unusual activity",
+        }.get(event.code, "existing retry policy")
+        message = f"Automatic retry authorized ({reason})."
+        if type(event.attempt) is int:
+            message += f" Attempt {event.attempt}."
+    elif phase == ProgressPhase.WAITING:
+        message = f"Paused for Flow usage limit; Resume after it resets. Completed: {completion}."
+    elif phase == ProgressPhase.BLOCKED:
+        reason = (
+            "Generation ownership is uncertain; no automatic resubmission."
+            if event.code == "FLOW_FAILURE_ATTRIBUTION_AMBIGUOUS" else
+            "Candidate ownership conflict; no automatic resubmission."
+            if event.code == "CANDIDATE_UUID_OWNERSHIP_CONFLICT" else
+            "Blocked; see the final error and existing recovery options."
+        )
+        message = f"{reason} Completed: {completion}."
+    elif phase == ProgressPhase.FAILED:
+        message = f"Stopped; see the final error and existing recovery options. Completed: {completion}."
+    elif phase == ProgressPhase.INTERRUPTED:
+        return f"Interrupted. Saved completion: {completion}. See existing Resume/recovery options."
+    elif phase == ProgressPhase.RETURNED:
+        return (
+            f"All orders complete: {completion}"
+            if snapshot.verified and total and counts["completed"] == total else
+            "Order processing ended; see the final status."
+        )
+    else:
+        return None  # Internal verification stays available in detailed mode.
+    return prefix + message
+
+
+def simple_terminal_progress(stream: TextIO, *, variants: int = 1) -> Callable[[ProgressSnapshot], None]:
+    """Present milestones only; the reporter retains every typed event unchanged."""
+    last_download: tuple[int | None, int | None] | None = None
+
+    def write(snapshot: ProgressSnapshot) -> None:
+        nonlocal last_download
+        event = snapshot.event
+        if event.phase in {ProgressPhase.VALIDATING, ProgressPhase.GENERATION}:
+            last_download = None
+        if event.phase == ProgressPhase.DOWNLOAD:
+            key = (event.order, event.variant if variants == 2 else None)
+            if key == last_download:
+                return
+            last_download = key
+        message = format_simple_progress(snapshot, variants=variants)
+        if message is not None:
+            print(message, file=stream, flush=True)
+    return write
+
+
 _CURRENT: ContextVar[ProgressReporter | None] = ContextVar("nano_batch_progress", default=None)
 
 
