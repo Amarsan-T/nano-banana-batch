@@ -2935,3 +2935,85 @@ browser, runner, persistence, ownership, retries, cancellation and worker protoc
 remain unchanged. The original Undo regression was observed failing before the
 fix, then passing afterward. Clipboard effects in tests were confined to mocked
 Tcl commands, not the operating-system clipboard.
+
+## Defect 6: completed-Order consistency gate (2026-10-19)
+
+The developer supplied an audit finding and authorized a focused correction.
+Codex reproduced every reported contradiction in disposable synthetic runs:
+an x2 Order retaining only one candidate, missing generation completion evidence,
+an Order or completed candidate retaining a download error, completed generation
+retaining error/error-code information, and missing Order output references.
+The baseline eight-test run had one valid completed-run control and 35 failed
+rejection checks: each of the seven inconsistent cases was accepted by sequential
+planning, download planning, sequential execution, standalone download execution
+and explicit-Retry sequential planning. No real run or browser was inspected.
+
+The shared download planner previously validated individual assets/ownership but
+checked only contiguity against the surviving candidate-list length. The later
+finalization helper returned immediately for completed Order metadata, bypassing
+its stricter consistency checks; Preview never entered that helper at all.
+Codex added a read-only consistency gate before returning a download plan and
+before the finalization early return. Sequential callers pass their validated
+runtime count; an explicit Batch count must agree. Standalone planning can use
+saved configured-count evidence when the Batch omits it. Surviving candidates
+never establish the expected count, and contradictory saved counts are rejected.
+
+The gate requires a nonempty generation-completion marker with no active
+generation error/code, expected ordered variants, clean completed-download error
+fields, consistent Order completion and canonical output references, and matching
+optional relative paths. It distinguishes completed generation from incomplete
+downloads, preserving partial/download-only Resume and the existing guarded
+interrupted-finalization repair. Normal UUID/legacy URL ownership, image/hash
+validation and file-claim checks still run. Preview performs no repair or writes;
+rejection does not become automatic Retry, including when explicit Retry is
+requested. No schema, generation checkpoint, asset installation, retry budget,
+cancellation, browser or worker-protocol implementation changed.
+
+Legacy URL/opaque identities and absent optional metadata remain supported with
+sufficient count/completion evidence. An undeclared legacy Batch without saved
+count evidence now fails closed in standalone download planning; sequential
+Resume can use its validated settings. Loading/diagnostics still preserve the
+original state. Users must not edit ownership, infer missing candidates or submit
+another generation as a repair. Timestamp markers are consistency evidence,
+not authenticated proof of historical events or physical file authorship.
+
+Older synthetic success fixtures omitted completion/count metadata or put
+historical notes in active error fields. Those fixtures now supply the expected
+metadata and store notes in result_details; their history/asset preservation
+assertions remain. Dedicated negative regressions now reject the active-error
+states they previously treated as successful. Added integration coverage checks
+that GUI Preview, CLI Preview and worker preflight reject the same contradiction
+before adapter creation, without exposing the stored error or modifying artifacts.
+Final verification totals are recorded below. Real Flow acceptance of this
+validation-only correction is not claimed.
+
+Focused verification selected 352 tests. All 315 tests outside the CLI test file
+passed, including all 24 new consistency/front-end regressions. Six diagnostic
+fixtures in the 37-test CLI selection initially failed because they marked a
+generation completed without timestamp/count evidence. Only that fixture metadata
+was added; all 37 CLI tests then passed in 5.492 seconds, retaining their original
+browser, mutation, identity and diagnostic assertions. The full-suite snapshot
+below includes those corrections and otherwise matches the focused source/test
+snapshot exactly.
+
+The first complete run executed 1,642 tests in 541.676 seconds and exposed 19
+errors (18 post-generation cancellation phase subtests plus one policy Resume
+fixture) and two standalone-cancellation failures. The first two fixtures omitted
+generation completion timestamps; the third lacked an authoritative x1 count.
+Declaring x1 also exposed its old top-level variants mock: configuration actually
+reads generation.variants. Only fixture timestamps, the declared count and that
+configuration nesting changed; all interruption/Resume assertions remain.
+The affected cancellation/policy selection then passed 31 tests in 18.192 seconds.
+Production code remained identical. The existing unrelated invalid-escape warning
+in the observer test harness remains; its JavaScript syntax checks pass. Final
+full-suite verification is repeated on this corrected fixture snapshot.
+
+Final full-suite verification passed all 1,642 tests in 525.933 seconds with no
+failures or skips. All 88 Python source/test hashes matched the final snapshot.
+Four publication-security checks, Python compilation, three unchanged observer
+JavaScript syntax checks, whitespace and ten-file scope review passed. Static
+comparison confirmed that only seven existing planning/call-through functions
+and the new consistency gate changed in runner.py; generation/checkpoint and
+candidate-completion persistence are unchanged. The final scope is one production
+file, seven test files and two documentation files. No private checkout, actual
+run artifacts, authenticated browser or real Flow operation was accessed.

@@ -844,6 +844,20 @@ earlier assets against an in-memory post-repair projection only after the disput
 target is proven to have no canonical assets or pending receipt. Normal Resume
 never applies that projection or clears disputed ownership automatically.
 
+Completed generation/download labels do not bypass state validation. Preview and
+execution require generation completion evidence, no retained generation error,
+the expected x1/x2 candidates, clean completed-download metadata and matching
+canonical output references. Partial downloads retain download-only Resume;
+inconsistent completed state fails closed without authorizing Retry or changing
+files. Expected counts come from the validated Batch/runtime settings, with saved
+configured-count evidence available to standalone `download-one`. The surviving
+candidate-list length is never proof of that expected count. Legacy URL/opaque
+identities and optional metadata remain supported when the required consistency
+evidence is available. If an older undeclared Batch lacks saved count evidence,
+standalone download planning is blocked; matching sequential Resume can use its
+validated generation settings. Do not edit saved ownership or use `--retry` to
+repair a completed-state contradiction. Preview never performs finalization repair.
+
 During generation/download batches, one Ctrl+C requests cancellation. Direct batch
 commands exit 130 after unwind; the launcher offers its recovery menu. A
 submitted/ambiguous attempt retains explicit Retry protection. Intentional batch

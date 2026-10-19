@@ -466,7 +466,9 @@ def plan_sequential_batch(
             generation_status = state_item.status
             download_status = state_item.download_status
             if state_item.status == "completed":
-                download_plan = plan_download_one(batch, run_dir, item.order)
+                download_plan = plan_download_one(
+                    batch, run_dir, item.order, expected_variants=settings.variants,
+                )
                 candidate_actions = tuple(
                     (candidate.candidate.variant, candidate.action)
                     for candidate in download_plan.candidates
@@ -921,15 +923,19 @@ def plan_download_one(
     order: int,
     *,
     overwrite: bool = False,
+    expected_variants: int | None = None,
 ) -> DownloadPlan:
     """Build a read-only one-item plan and fail before any browser interaction."""
     state, state_item = _download_state_item(batch, run_dir, order)
-    return _plan_download_state(batch, run_dir, state, state_item, overwrite=overwrite)
+    return _plan_download_state(
+        batch, run_dir, state, state_item, overwrite=overwrite,
+        expected_variants=expected_variants,
+    )
 
 
 def _plan_download_state(
     batch: Batch, run_dir: Path, state: RunState, state_item: RunItemState,
-    *, overwrite: bool = False,
+    *, overwrite: bool = False, expected_variants: int | None = None,
 ) -> DownloadPlan:
     """Apply identical download checks to a validated, read-only state snapshot."""
     asset_dir = run_asset_directory(run_dir)
@@ -942,9 +948,9 @@ def _plan_download_state(
         raise ValueError("Planned staging directory cannot be safely inspected.") from exc
     else:
         raise ValueError("Planned staging directory already exists; refusing reuse.")
-    expected_variants = list(range(1, len(state_item.candidates) + 1))
+    contiguous_variants = list(range(1, len(state_item.candidates) + 1))
     actual_variants = [candidate.variant for candidate in state_item.candidates]
-    if actual_variants != expected_variants:
+    if actual_variants != contiguous_variants:
         raise ValueError(
             "Persisted candidate order is not contiguous and stable; refusing to reorder downloads."
         )
@@ -1042,13 +1048,91 @@ def _plan_download_state(
                 action=action,
             )
         )
-    return DownloadPlan(
+    plan = DownloadPlan(
         state=state,
         item=state_item,
         candidates=tuple(plans),
         asset_dir=asset_dir,
         staging_dir=staging_dir,
     )
+    declared_variants = resolve_item(batch, state_item.order).variants
+    if declared_variants is not None:
+        if expected_variants is not None and (
+            type(expected_variants) is not int or expected_variants != declared_variants
+        ):
+            raise ValueError("Batch and runtime variant counts conflict.")
+        expected_variants = declared_variants
+    _validate_completed_order_state(plan, run_dir, expected_variants=expected_variants)
+    return plan
+
+
+def _validate_completed_order_state(
+    plan: DownloadPlan, run_dir: Path, *, expected_variants: int | None,
+) -> None:
+    """Read-only consistency gate shared by Preview, Resume and finalization.
+
+    Completed generation is distinct from completed downloading. Failed/missing
+    downloads retain their normal recovery path, but cannot waive generation or
+    already-completed candidate evidence. Never infer x1/x2 from surviving rows.
+    """
+    item = plan.item
+    if (
+        item.status != "completed"
+        or not isinstance(item.completed_at, str) or not item.completed_at.strip()
+        or item.error is not None or item.generation_error_code is not None
+    ):
+        raise ValueError(f"Order {item.order} has inconsistent completed generation state.")
+    try:
+        details = json.loads(item.result_details or "{}")
+    except (TypeError, ValueError):
+        details = None  # Legacy free-form diagnostics are not variant proof.
+    if expected_variants is None and isinstance(details, dict):
+        expected_variants = details.get("configured_variants")
+    if (
+        type(expected_variants) is not int or expected_variants not in {1, 2}
+        or any(type(candidate.variant) is not int for candidate in item.candidates)
+        or [candidate.variant for candidate in item.candidates]
+        != list(range(1, expected_variants + 1))
+    ):
+        raise ValueError(f"Order {item.order} lacks the expected candidate/variant count proof.")
+    if isinstance(details, dict):
+        for name in ("configured_variants", "requested_variants"):
+            if name in details and (
+                type(details[name]) is not int or details[name] != expected_variants
+            ):
+                raise ValueError("Saved generation variant counts conflict.")
+
+    completed = [entry for entry in plan.candidates if entry.candidate.download_status == "completed"]
+    if item.download_completed_at is not None and (
+        not isinstance(item.download_completed_at, str)
+        or (item.download_completed_at and not item.download_completed_at.strip())
+    ):
+        raise ValueError(f"Order {item.order} has conflicting download finalization state.")
+    if item.download_status == "completed" and len(completed) != len(plan.candidates):
+        raise ValueError(f"Order {item.order} download completion contradicts its candidates.")
+    if (
+        any(entry.candidate.download_error is not None for entry in completed)
+        or ((item.download_status == "completed" or len(completed) == len(plan.candidates))
+            and item.download_error is not None)
+    ):
+        raise ValueError(f"Order {item.order} has conflicting download finalization state.")
+    if len(completed) == len(plan.candidates) and item.download_status == "failed":
+        raise ValueError(f"Order {item.order} has conflicting download finalization state.")
+    if (
+        not isinstance(item.output_files, list)
+        or any(not isinstance(path, str) or not path.strip() for path in item.output_files)
+        or [Path(path).resolve() for path in item.output_files]
+        != [entry.destination for entry in completed]
+    ):
+        raise ValueError(f"Order {item.order} output_files do not match its canonical assets.")
+    for entry in completed:
+        relative = entry.candidate.local_relative_path
+        if relative is not None and (
+            not isinstance(relative, str) or not relative.strip()
+            or Path(relative).is_absolute()
+            or (run_dir / relative).resolve() != entry.destination
+        ):
+            raise ValueError("Completed download relative path conflicts with its canonical asset.")
 
 
 def _persist_download_completion(
@@ -1095,7 +1179,9 @@ def _persist_download_completion(
     record_progress(ProgressPhase.CANDIDATE_SAVED, order=item.order, variant=candidate.variant)
 
 
-def _reconcile_pending_downloads(batch: Batch, run_dir: Path, plan: DownloadPlan) -> DownloadPlan:
+def _reconcile_pending_downloads(
+    batch: Batch, run_dir: Path, plan: DownloadPlan, *, expected_variants: int | None = None,
+) -> DownloadPlan:
     """Recover saved receipts locally before starting any new download attempt."""
     root = run_dir.resolve()
     for candidate_plan in plan.candidates:
@@ -1152,7 +1238,7 @@ def _reconcile_pending_downloads(batch: Batch, run_dir: Path, plan: DownloadPlan
                 browser_download_guid=pending.browser_download_guid, mechanism=pending.download_mechanism,
             ), root,
         )
-    return plan_download_one(batch, root, plan.item.order)
+    return plan_download_one(batch, root, plan.item.order, expected_variants=expected_variants)
 
 
 def _reconcile_download_finalization(
@@ -1163,6 +1249,7 @@ def _reconcile_download_finalization(
 ) -> DownloadPlan:
     """Finalize only an interrupted Order whose canonical assets already validate."""
     item = plan.item
+    _validate_completed_order_state(plan, run_dir, expected_variants=expected_variants)
     if item.download_status == "completed" and item.download_completed_at:
         return plan
     if not plan.candidates or any(candidate.action != "skip_valid" for candidate in plan.candidates):
@@ -1177,29 +1264,6 @@ def _reconcile_download_finalization(
     ):
         raise ValueError(f"Order {item.order} has conflicting download finalization state.")
 
-    if expected_variants is None:
-        # download-one has no runtime generation settings. Use saved production
-        # evidence, never the remaining candidate-list length as the expected count.
-        try:
-            details = json.loads(item.result_details or "{}")
-        except (TypeError, ValueError):
-            details = None
-        if isinstance(details, dict):
-            expected_variants = details.get("configured_variants")
-            if details.get("requested_variants", expected_variants) != expected_variants:
-                raise ValueError("Saved generation variant counts conflict.")
-    if (
-        type(expected_variants) is not int or expected_variants not in {1, 2}
-        or [candidate.variant for candidate in item.candidates]
-        != list(range(1, expected_variants + 1))
-    ):
-        raise ValueError(f"Order {item.order} lacks the expected candidate/variant count proof.")
-
-    destinations = [candidate.destination for candidate in plan.candidates]
-    if len(item.output_files) != len(destinations) or [
-        Path(path).resolve() for path in item.output_files
-    ] != destinations:
-        raise ValueError(f"Order {item.order} output_files do not match its canonical assets.")
     for candidate_plan in plan.candidates:
         candidate = candidate_plan.candidate
         cancellation_checkpoint("download_finalization_reconciliation")
@@ -1577,20 +1641,25 @@ def execute_download_one(
     adapter: OneCandidateDownloadAdapter,
     *,
     overwrite: bool = False,
+    expected_variants: int | None = None,
 ) -> tuple[RunState, RunItemState]:
     """Download and persist candidates one at a time without changing generation status."""
-    plan = plan_download_one(batch, run_dir, order, overwrite=overwrite)
+    if expected_variants is None:
+        expected_variants = resolve_item(batch, order).variants
+    plan = plan_download_one(
+        batch, run_dir, order, overwrite=overwrite, expected_variants=expected_variants,
+    )
     if any(candidate.action == "recover_pending" for candidate in plan.candidates):
         record_progress(ProgressPhase.RECONCILE, order=order)
         flush_progress()
-        plan = _reconcile_pending_downloads(batch, run_dir, plan)
+        plan = _reconcile_pending_downloads(batch, run_dir, plan, expected_variants=expected_variants)
     state = plan.state
     state_item = plan.item
     store = RunStateStore(run_dir / "run_state.json")
     pending = [candidate for candidate in plan.candidates if candidate.action != "skip_valid"]
     if not pending:
         plan = _reconcile_download_finalization(
-            plan, run_dir, expected_variants=resolve_item(batch, order).variants,
+            plan, run_dir, expected_variants=expected_variants,
         )
         return plan.state, plan.item
 
@@ -2538,7 +2607,7 @@ def _execute_sequential_batch(
 
         record_progress(ProgressPhase.VERIFYING, order=item.order)
         flush_progress()
-        download_plan = plan_download_one(batch, run_dir, item.order)
+        download_plan = plan_download_one(batch, run_dir, item.order, expected_variants=settings.variants)
         pending_downloads = [
             candidate
             for candidate in download_plan.candidates
@@ -2556,7 +2625,7 @@ def _execute_sequential_batch(
             cancellation_checkpoint("download_dispatch")
             record_progress(ProgressPhase.DOWNLOAD, order=item.order)
             flush_progress()
-            execute_download_one(batch, run_dir, item.order, adapter)
+            execute_download_one(batch, run_dir, item.order, adapter, expected_variants=settings.variants)
             download_outcome = "resumed" if previously_completed or any(
                 candidate.action == "recover_pending" for candidate in pending_downloads
             ) else "downloaded"

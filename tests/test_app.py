@@ -936,6 +936,8 @@ class AppTests(unittest.TestCase):
             batch = app.load_batch(batch_path)
             state = app.initialize_run_state(batch, run_dir)
             state.items[0].status = "completed"
+            state.items[0].completed_at = "2026-01-01T00:00:00+00:00"
+            state.items[0].result_details = '{"configured_variants":2,"requested_variants":2}'
             state.items[0].candidates = [
                 CandidateRecord(
                     variant=1,
@@ -1133,6 +1135,8 @@ class AppTests(unittest.TestCase):
             batch = app.load_batch(batch_path)
             state = app.initialize_run_state(batch, run_dir)
             state.items[0].status = "completed"
+            state.items[0].completed_at = "2026-01-01T00:00:00+00:00"
+            state.items[0].result_details = '{"configured_variants":1,"requested_variants":1}'
             state.items[0].download_status = "failed"
             state.items[0].candidates = [
                 CandidateRecord(
@@ -1195,6 +1199,8 @@ class AppTests(unittest.TestCase):
             batch = app.load_batch(batch_path)
             state = app.initialize_run_state(batch, run_dir)
             state.items[0].status = "completed"
+            state.items[0].completed_at = "2026-01-01T00:00:00+00:00"
+            state.items[0].result_details = '{"configured_variants":1,"requested_variants":1}'
             state.items[0].download_status = "failed"
             state.items[0].candidates = [
                 CandidateRecord(
@@ -1360,6 +1366,8 @@ class AppTests(unittest.TestCase):
             batch = app.load_batch(batch_path)
             state = app.initialize_run_state(batch, run_dir)
             state.items[0].status = "completed"
+            state.items[0].completed_at = "2026-01-01T00:00:00+00:00"
+            state.items[0].result_details = '{"configured_variants":1,"requested_variants":1}'
             state.items[0].download_status = "failed"
             state.items[0].download_attempt_count = 5
             state.items[0].candidates = [
@@ -1514,6 +1522,8 @@ class AppTests(unittest.TestCase):
             batch = app.load_batch(batch_path)
             state = app.initialize_run_state(batch, run_dir)
             state.items[0].status = "completed"
+            state.items[0].completed_at = "2026-01-01T00:00:00+00:00"
+            state.items[0].result_details = '{"configured_variants":1,"requested_variants":1}'
             state.items[0].attempt_count = 2
             state.items[0].download_status = "failed"
             state.items[0].download_attempt_count = 5
@@ -1615,6 +1625,8 @@ class AppTests(unittest.TestCase):
             batch = app.load_batch(batch_path)
             state = app.initialize_run_state(batch, run_dir)
             state.items[0].status = "completed"
+            state.items[0].completed_at = "2026-01-01T00:00:00+00:00"
+            state.items[0].result_details = '{"configured_variants":1,"requested_variants":1}'
             state.items[0].attempt_count = 2
             state.items[0].download_status = "failed"
             state.items[0].download_attempt_count = 5

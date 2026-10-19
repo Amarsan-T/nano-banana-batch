@@ -32,7 +32,7 @@ class SingleOrderCancellationTests(unittest.TestCase):
         self.run_dir = Path(temporary.name) / 'synthetic-run'
         self.batch = Batch(
             batch_id='sha256:single-order-cancel', source_schema='test',
-            items=(BatchItem(order=1, visual_id='visual_1', prompt='synthetic still life'),),
+            items=(BatchItem(order=1, visual_id='visual_1', prompt='synthetic still life', variants=1),),
         )
 
     def invoke(self, command, adapter, *, download=False):
@@ -44,7 +44,7 @@ class SingleOrderCancellationTests(unittest.TestCase):
             argv.append('--download')
         with patch('sys.argv', argv), patch.object(
             app, 'load_batch', return_value=self.batch
-        ), patch.object(app, '_load_config', return_value={'variants': 1}), patch.object(
+        ), patch.object(app, '_load_config', return_value={'generation': {'variants': 1}}), patch.object(
             app, '_flow_session_from_args', return_value=adapter
         ), redirect_stdout(StringIO()), redirect_stderr(StringIO()):
             result = app.main()

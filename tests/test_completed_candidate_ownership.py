@@ -24,7 +24,7 @@ class CompletedCandidateOwnershipTests(unittest.TestCase):
         self.run_dir = Path(temporary.name) / 'synthetic-run'
         self.batch = Batch(
             batch_id='sha256:completed-ownership-audit', source_schema='test',
-            items=tuple(BatchItem(order=i, visual_id=f'visual_{i}', prompt=f'synthetic {i}')
+            items=tuple(BatchItem(order=i, visual_id=f'visual_{i}', prompt=f'synthetic {i}', variants=1)
                         for i in (1, 2)),
         )
         self.settings = GenerationSettings(variants=1)

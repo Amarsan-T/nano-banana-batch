@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from dataclasses import asdict
@@ -164,7 +165,8 @@ class SequentialFakeAdapter:
                     ),
                 )
                 for variant in (1, 2)
-            )
+            ),
+            details=json.dumps({"configured_variants": settings.variants, "requested_variants": settings.variants}),
         )
 
     def download_candidate(self, *, candidate, destination):
@@ -220,6 +222,8 @@ class RunnerTests(unittest.TestCase):
         item = state.items[0]
         item.status = "completed"
         item.attempt_count = 2
+        item.completed_at = "2026-01-01T00:00:00+00:00"
+        item.result_details = '{"configured_variants":2,"requested_variants":2}'
         item.candidates = [
             CandidateRecord(
                 variant=1,
@@ -987,7 +991,9 @@ class RunnerTests(unittest.TestCase):
             run_dir = Path(tmp) / "run"
             self.accepted_order_one_run(run_dir)
             stored = RunStateStore(run_dir / "run_state.json").load()
-            stored.items[0].error = "historical generation note"
+            historical_details = json.loads(stored.items[0].result_details)
+            historical_details["note"] = "historical generation note"
+            stored.items[0].result_details = json.dumps(historical_details)
             RunStateStore(run_dir / "run_state.json").save(stored)
             order_one_paths = [
                 Path(candidate.local_path) for candidate in stored.items[0].candidates
@@ -1041,7 +1047,8 @@ class RunnerTests(unittest.TestCase):
                 [item.download_attempt_count for item in final.items],
                 [8, 1, 1],
             )
-            self.assertEqual(final.items[0].error, "historical generation note")
+            self.assertEqual(final.items[0].result_details, stored.items[0].result_details)
+            self.assertIsNone(final.items[0].error)
             self.assertEqual(
                 [path.read_bytes() for path in order_one_paths],
                 order_one_bytes,
@@ -1150,8 +1157,9 @@ class RunnerTests(unittest.TestCase):
             )
             preserved_path = Path(partial.items[2].candidates[0].local_path)
             preserved_bytes = preserved_path.read_bytes()
-            partial.items[0].error = "historical generation note"
-            partial.items[0].download_error = "historical download note"
+            historical_details = json.loads(partial.items[0].result_details)
+            historical_details["notes"] = ["historical generation note", "historical download note"]
+            partial.items[0].result_details = json.dumps(historical_details)
             store.save(partial)
             preserved_first = store.load().items[0]
 
