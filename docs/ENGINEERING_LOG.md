@@ -3017,3 +3017,80 @@ and the new consistency gate changed in runner.py; generation/checkpoint and
 candidate-completion persistence are unchanged. The final scope is one production
 file, seven test files and two documentation files. No private checkout, actual
 run artifacts, authenticated browser or real Flow operation was accessed.
+
+## Playwright 1.60.0 isolated compatibility verification (2026-10-19)
+
+The developer requested installed-package evidence for the declared minimum,
+separate from the earlier source audit and reported live acceptance at 1.64.0.
+Codex verified clean baseline `b58be12493d825a9930068862ced7e746a272251` on the
+existing documentation branch and created a disposable virtual environment under
+ignored `.tmp/playwright-1.60-verification-20261019/venv`, outside the working
+`.venv`. No application, test, dependency declaration or Git history changed.
+
+The isolated environment uses Windows x64 Python 3.12.10, exactly
+`playwright==1.60.0`, Pillow 12.3.0, greenlet 3.5.6, pyee 13.0.1 and
+typing-extensions 4.16.0. Pillow matches the development environment; pip resolved
+Playwright's required `pyee>=13,<14` and `greenlet>=3.1.1,<4` independently.
+Package metadata confirms the exact version and Python compatibility, and
+`pip check` reports no broken requirements. No Playwright browser was downloaded.
+The existing environment retains Playwright 1.64.0 and pyee 14.0.0.
+
+Actual installed sync and async `BrowserType.connect_over_cdp` signatures accept
+`is_local=True` and `no_defaults=True`. Receiver review and signature binding
+checked 213 adapter call sites across 30 method names against both APIs;
+application dictionary `clear()` calls were excluded. The bundled driver's
+protocol schema also accepts both fields. Its inspected CDP attachment path
+uses transport disconnection for close. These are package/source findings,
+not an executed Chrome attachment or browser-ownership acceptance test.
+Deprecation notes in the inspected methods concern unused options
+(`no_wait_after` and `is_visible(timeout=...)`); the adapter does not pass those
+options or request the discouraged `networkidle` readiness state.
+
+Seventeen installed-package probes passed. They exercised genuine Connection and
+ProtocolCallback objects, abandoned asyncio waits, the connection's own
+TargetClosedError, and the guarded cleanup helper after loop closure. Unrelated,
+pre-existing and unregistered errors remain observable; unknown internal layouts
+retain the original reporting behavior. Cancellation before teardown, during
+detach and during stop preserved the first signal with real shutdown-error
+objects. Installed sync/async CDPSession wrappers delivered synthetic events and
+removed listeners correctly. CDP send/detach and both attachment wrappers were
+intercepted in memory to verify argument marshalling without sending an RPC.
+Both real sync and async bundled drivers started and stopped idempotently without
+launching a browser or connecting to any endpoint.
+A further check used the genuine running sync manager and driver with a synthetic
+registered callback: latched cancellation through FlowSession.close preserved
+the first signal, closed the loop and observed only its own shutdown error.
+An unregistered error remained observable, and no browser cleanup RPC was made.
+
+The focused adapter, cancellation/teardown, completion-checkpoint, CLI, launcher
+and worker selection passed all 589 tests in 30.767 seconds, without skips.
+Those regressions primarily use mocks/synthetic fixtures; the installed-package
+probes above provide separate evidence. The initial verification guard mistakenly
+blocked Windows asyncio's internal `_fallback_socketpair`, causing eleven
+harness-induced failures. Only the ignored guard was corrected to permit that
+stdlib operation; no application or regression test was changed. The incomplete
+full run using the old guard was stopped and superseded.
+
+The corrected full offline suite passed all 1,642 tests in 903.308 seconds,
+with zero failures, errors or skips, matching the recorded baseline test count.
+The guard recorded no browser-launch or endpoint-connection attempts; its eleven
+allowed loopback connections were Windows asyncio's internal socket pairs.
+Worker subprocess cases used the existing preview or injected synthetic adapters.
+Launcher messages about opening/reusing Chrome came from mocked regression cases,
+not real browser operations. The runtime difference from the earlier 1.64.0 run
+is not a controlled performance comparison or evidence of a version slowdown.
+
+Python compilation, three unchanged observer JavaScript syntax checks and four
+publication-security tests passed. A pre-documentation hash comparison found all
+103 tracked files and all 1,537 working `.venv` files unchanged. Detailed probe
+results, dependency metadata and test logs remain ignored under the disposable
+verification directory. Only this entry and the README verification note are
+public documentation changes. At the verification stop point, nothing had been
+staged, committed or published; the developer subsequently authorized a
+documentation-only commit and normal fast-forward publication of this evidence.
+
+No unsupported API or reproducible package incompatibility was found in these
+checks, so the declared `playwright>=1.60,<2` minimum is retained. This does not
+validate every allowed dependency version, other Python versions, a clean Windows
+installation, actual Chrome/CDP behavior or real Flow at 1.60.0. The private
+checkout, authenticated profiles and real run artifacts were not accessed.

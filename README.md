@@ -79,12 +79,19 @@ both CDP attachment paths use `is_local` (added in 1.58) and `no_defaults` (adde
 in 1.60), as documented in the
 [Playwright API reference](https://playwright.dev/python/docs/api/class-browsertype#browser-type-connect-over-cdp).
 No claim is made that the entire allowed dependency range has been tested.
-The later reliability audit checked both attachment calls and 212 public API call
+An earlier reliability audit checked both attachment calls and 212 public API call
 shapes against the official Playwright 1.60.0 Python source. This establishes API
 availability, not installed-package, driver or live-Flow acceptance at the minimum.
+Subsequent isolated Windows verification installed exactly Playwright 1.60.0 with
+Python 3.12.10. Installed sync/async signatures, intercepted argument marshalling,
+event handling, cancellation cleanup internals, and browser-free driver start/stop
+passed verification, along with all 1,642 offline tests; see the
+[engineering log](docs/ENGINEERING_LOG.md#playwright-1600-isolated-compatibility-verification-2026-10-19)
+for test results and limits. No Chrome/CDP connection or live Flow acceptance was
+performed at 1.60.0. The existing development environment was left unchanged.
 The developer reports real acceptance with Python 3.12.10 and Playwright 1.64.0;
-Codex did not inspect that environment. A clean-Windows installation and a browser
-version matrix have not been reproduced. The API floor remains `>=1.60,<2`.
+Codex did not inspect that live test session. A clean-Windows installation and a
+browser version matrix have not been reproduced. The API floor remains `>=1.60,<2`.
 
 Install Python 3.12 and Node.js before following these commands. Node.js must be on
 `PATH` to run the embedded JavaScript observer regressions; those tests skip if
