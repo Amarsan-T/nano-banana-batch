@@ -296,91 +296,108 @@ Set top-level `"prestart_timing_debug": true` in `config.json` to print concise
 production diagnostic; the default is `false`, so these timing summaries remain
 opt-in.
 
-## Preview-only Windows GUI
+## Windows GUI
 
-Stage 4B adds a separate Tkinter/ttk window. From the project directory, launch it
-with the existing environment (Python must include Tcl/Tk):
+From the public project directory, launch the Tkinter/ttk application with the
+existing environment (Python must include Tcl/Tk):
 
 ```powershell
 .\.venv\Scripts\python.exe gui.py
 ```
 
-Chrome does not need to be running for Preview.
+Preview requires no Chrome and consumes no generation credits. **Start / Resume
+can consume Flow credits**, including additional submissions from the existing
+automatic retry budgets. It requires a fresh Preview and explicit confirmation.
+Stage 4D execution has synthetic offline verification only, not live GUI acceptance.
 
-1. Click **Choose file...** and select an existing UTF-8 prompt text file.
-2. For **New run (not created)**, enter a fresh folder path beneath an existing
-   parent directory. No folder is created. To inspect saved work instead, click
-   **Open existing run...** and select its folder containing `run_state.json`.
-3. Click **Preview**. The existing planner validates the selected input, saved
-   ownership and applicable canonical assets without browser interaction.
-4. Review total Orders, completed Orders, pending work, download-only Resume,
-   finalization-pending, waiting, blocked and existing automatic-retry eligibility.
-   These are planned actions, not actions performed by the GUI.
+1. Click **Choose file...** and select a UTF-8 prompt text file, one prompt per
+   accepted line. For **New run (not created)**, enter a fresh folder beneath an
+   existing parent. No folder is created during selection or Preview.
+2. To inspect or Resume saved work, click **Open existing run...** and select its
+   folder containing `run_state.json`. Keep the same original prompt file.
+3. Click **Preview**. The existing planner validates prompts, ownership and assets
+   read-only. Review pending, completed, download-only, finalization-pending,
+   waiting, blocked and existing automatic-retry eligibility. These are plans.
+4. Before real execution, use `run.bat` **Launch Chrome** separately. Log in
+   manually in the dedicated profile. Select Image mode, Nano Banana 2.1 (or a
+   valid image model), 16:9, x1 and 1K Original size. Keep that Chrome maximized;
+   it may remain behind other applications. Native minimized operation is
+   unsupported. **Launch Chrome in the GUI is disabled**: the current worker
+   protocol has no launch operation, so no shortcut bypasses browser ownership.
+5. Click **Start / Resume**, read the credit/retry warning and explicitly confirm.
+   The supervisor revalidates the Preview, and the worker repeats validation
+   inside the existing run/browser execution locks before calling the runner.
+   Changed inputs, configuration, saved state or plan decisions reject the old
+   binding. A blocked Order cannot authorize Start; manual `--retry` and policy
+   prompt editing remain CLI/launcher operations, never automatic GUI actions.
+6. Watch current Order, phase, completed/remaining counts and the progress bar.
+   The table retains the labeled Preview snapshot; it is not a live state table.
+   Only fully finalized Orders count as completed. Generation saved is distinct
+   from download and full completion. 100% does not prove worker exit: terminal
+   success is shown only after a valid terminal message, EOF, matching process
+   exit code and closed worker handles. Skip-only and download-only Resume use
+   the existing paths without authorizing another generation.
+7. **Stop safely** requests cooperative cancellation once. The window stays
+   responsive and displays Stop pending while an operation/cleanup finishes.
+   A blocked SDK call has no finite guaranteed Stop latency. No process tree is
+   forcibly terminated. Console Ctrl+C also requests this cleanup and preserves
+   exit code 130. Closing an active window offers either keeping it open
+   or requesting Stop and closing only after worker exit; it never abandons the
+   invocation as normal shutdown.
+8. After completion or interruption, use **Existing run** and Preview again before
+   another invocation. Inputs and execution controls stay locked until the child
+   actually exits, including after communication loss. No automatic restart or
+   resubmission occurs. An acknowledged generation without durable ownership
+   remains blocked; manual Retry is a new submission, not reconciliation.
+9. **Open output folder** explicitly opens the selected saved run's assets folder
+   (or run folder if assets do not yet exist). Redirected asset folders are
+   rejected. No images or saved state are edited. Safe diagnostics show only
+   fixed phases, numeric counts and allowlisted codes; raw CLI/SDK output is not
+   forwarded. Use existing CLI diagnostics if further recovery review is needed.
 
-**Start / Resume and Stop are disabled and have no execution callbacks.** GUI
-execution, downloads, Chrome launching and active-run cancellation are not
-implemented. The private worker backend below is not connected to these controls.
-Preview consumes no generation credits and
-does not create or repair state, change prompts, reconcile receipts, or modify
-assets. The existing CLI and `run.bat` workflows remain unchanged.
+The GUI reads repository-local `config.json` through the same browser-free parsing
+helpers as the CLI; absence uses existing defaults. The text workflow always
+uses x1. External x2 batch JSON still belongs to the existing CLI and original
+batch; the GUI does not guess its identity from a text file. No Flow setting is
+changed automatically. The normal CLI and `run.bat` remain available.
 
-The GUI uses the existing x1 prompt-file parser and Image/16:9 defaults; it does
-not read private `config.json` or change Flow settings. It accepts prompt text,
-not external batch JSON. Use the existing CLI and original batch for external
-x2 runs; the GUI does not guess their semantic identity from a text file.
+Preview runs on a read-only thread; the table shows at most 100 Orders per page.
+Input edits clear authorization immediately, and nominal one-second background
+checks rehash prompt/state/configuration files. Slow filesystems can delay change
+detection. Assets are revalidated when planning, not continuously monitored.
+Confirmation is bound to the displayed plan and private file fingerprints; this
+is transient change detection, not a credential, signature or persisted state.
+Nonparticipating writers and filesystem races after validation remain outside
+these guarantees. Keep the selected run, prompt and configuration files unchanged
+during execution; the worker uses the initially validated batch.
 
-Validation and input/state fingerprint checks run on one read-only background
-thread, returning only sanitized plan labels through a bounded queue. Counts are
-computed there; the table displays at most 100 Orders per page. Input-field edits
-clear the plan immediately. After validation, nominal one-second background checks
-rehash the prompt file and saved state; detected changes clear the displayed plan
-and require another Preview. A busy filesystem can delay detection. Asset integrity
-is checked during Preview, not continuously monitored. These checks are snapshots,
-not locks or authorization for future execution; concurrent writers and filesystem
-races remain unsupported.
+### Worker infrastructure and verification limits
 
-Only your explicitly selected paths appear in the input fields. Plan rows show
-numeric Orders and fixed labels without prompt text, candidate UUIDs or URLs.
-Errors use fixed guidance rather than raw exceptions; no GUI diagnostic log is
-written. Real Tk widgets, responsiveness and read-only behavior are tested with
-synthetic offline fixtures. This is not live Flow acceptance or a packaged Windows
-distribution.
+Stage 4B user-operated Windows acceptance displayed all 20 previously completed
+Orders with zero pending, blocked or download-only items. That is reported
+Preview evidence, not an independently repeated inspection or Stage 4D acceptance.
 
-### Private worker infrastructure (Stage 4C)
+Stage 4D connects the Stage 4C one-job subprocess to the GUI. The supervisor starts
+an explicit Python executable with `shell=False` away from Tk callbacks; the
+existing runner and all Playwright activity stay on the worker main thread.
+Bounded typed messages coalesce progress under backpressure. All widgets stay on
+the Tk thread; no human-readable terminal output is parsed for execution state.
+No dependency, persisted field, browser poll or generation engine was added.
 
-Stage 4B Windows acceptance was user-operated: the GUI displayed all 20 previously
-completed Orders with zero pending, blocked or download-only items. This is
-reported acceptance evidence, not an independently repeated inspection.
+Windows OS-held mutexes protect the run and a coarse machine-wide dedicated-browser
+gate across participating profiles/ports. Competing execution fails closed while
+read-only Preview remains available. POSIX fallback is local, per-user advisory
+locking, not cross-user/host coordination; it was not verified as Windows GUI
+acceptance. Older nonparticipating programs, manual browser actions and filesystem
+races are not covered. See [the private worker contract](docs/GUI_WORKER_PROTOCOL.md).
 
-Stage 4C adds a private, one-job Python subprocess backend for a future GUI.
-`nano_batch.worker_process.WorkerProcess` launches the explicit Python executable
-with an argument list and `shell=False`; `nano_batch.gui_worker` owns configuration
-loading and the existing sequential runner on its main thread. Starting the worker
-does not submit a job or launch Chrome. An explicitly submitted backend execution
-job can perform the existing credit-consuming workflow; **the current Tk window
-has no route to submit one**. Continue using the normal CLI/launcher for real runs.
-
-The versioned private pipe protocol carries validated, bounded plan counts,
-progress and terminal outcomes. Raw CLI/SDK output is not forwarded. Stop is
-cooperative: its acknowledgement means **Stop pending**, not stopped or rolled
-back. Existing main-thread cancellation checkpoints consume the request; a blocked
-SDK/browser call may delay it without a finite guaranteed completion time. The
-backend never uses process-tree termination as ordinary Stop and never resubmits
-an acknowledged generation to recover from lost communication. Terminal messages
-are accepted only after a matching process exit. Lost communication requires
-review of durable state through the existing Preview/Resume safeguards.
-
-Mutating CLI and worker paths now share OS-held execution ownership. On Windows,
-named mutexes protect the selected run and a deliberately coarse, machine-wide
-dedicated-browser gate across all configured profiles/ports. A competing command
-fails before executing; read-only batch Preview remains available. Normal unwind
-or process/thread exit releases OS ownership. Do not delete or bypass alleged
-stale locks. POSIX uses local per-user advisory locks; other users, nonparticipating
-programs, other hosts and distributed filesystem coordination are not covered.
-No lock changes browser authentication, repairs saved state, or eliminates
-filesystem races. See [the private worker contract](docs/GUI_WORKER_PROTOCOL.md)
-for limits and lifecycle details. Stage 4C has offline synthetic verification only;
-live GUI execution and Stage 4D remain excluded.
+Suggested user-operated acceptance starts with a completed run: Preview and confirm
+skip-only Resume, expecting no generation/download. Only with explicit user choice
+and awareness of credit cost, use a fresh two-Order batch, fully decode its JPEGs,
+then Preview and perform skip-only Resume. Validate cooperative Stop first on
+non-submitting work. Do not deliberately interrupt unfinished acknowledged
+production generation to prove recovery; retain the existing offline fault tests.
+GUI execution, Stop and real Flow behavior still require user-operated acceptance.
 
 ## Sequential batch progress
 

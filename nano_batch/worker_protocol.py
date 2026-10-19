@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -15,7 +16,7 @@ MAX_FRAME = 8192
 _MAX_NUMBER = 2**53 - 1
 _CODES = _SAFE_CODES | {
     "OPERATION_FAILED", "INVALID_INPUT", "PROTOCOL_ERROR", "CHANNEL_LOST",
-    "WORKER_LOST", "OWNERSHIP_BUSY", "OWNERSHIP_UNAVAILABLE",
+    "WORKER_LOST", "OWNERSHIP_BUSY", "OWNERSHIP_UNAVAILABLE", "STALE_PREVIEW",
 }
 _COUNTS = {"pending", "active", "completed", "waiting", "failed_or_blocked", "stopped"}
 _PREVIEW_COUNTS = {"pending", "completed", "download_only", "finalization_pending", "blocked", "waiting", "retry"}
@@ -39,6 +40,7 @@ class JobRequest:
     prompt_file: str = field(repr=False)
     run_dir: str = field(repr=False)
     config_file: str = field(repr=False)
+    expected_snapshot: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -162,14 +164,18 @@ def _decode_request(frame: bytes) -> JobRequest | StopRequest:
     if data["type"] == "stop":
         _keys(data, set())
         return StopRequest()
-    _keys(data, {"mode", "prompt_file", "run_dir", "config_file"})
+    optional = {"expected_snapshot"} if "expected_snapshot" in data else set()
+    _keys(data, {"mode", "prompt_file", "run_dir", "config_file"} | optional)
+    expected = data.get("expected_snapshot")
+    if optional and (type(expected) is not str or re.fullmatch(r"[0-9a-f]{64}", expected) is None):
+        raise ProtocolError()
     if data["type"] != "job" or data["mode"] not in {mode.value for mode in JobMode}:
         raise ProtocolError()
     for name in ("prompt_file", "run_dir", "config_file"):
         value = data[name]
         if type(value) is not str or not value or len(value) > 2048 or any(char in value for char in "\0\r\n"):
             raise ProtocolError()
-    return JobRequest(JobMode(data["mode"]), data["prompt_file"], data["run_dir"], data["config_file"])
+    return JobRequest(JobMode(data["mode"]), data["prompt_file"], data["run_dir"], data["config_file"], expected)
 
 
 def decode_request(frame: bytes) -> JobRequest | StopRequest:
@@ -187,6 +193,8 @@ def encode(value: WorkerMessage | JobRequest | StopRequest) -> bytes:
             raise ProtocolError()
         data = {"v": VERSION, "type": "job", "mode": value.mode.value,
                 "prompt_file": value.prompt_file, "run_dir": value.run_dir, "config_file": value.config_file}
+        if value.expected_snapshot is not None:
+            data["expected_snapshot"] = value.expected_snapshot
     elif isinstance(value, StopRequest):
         data = {"v": VERSION, "type": "stop"}
     else:

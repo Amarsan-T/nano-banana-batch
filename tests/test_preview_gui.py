@@ -69,10 +69,10 @@ class PreviewWindowTests(unittest.TestCase):
         self.controller.messages.append(PreviewMessage(self.controller.revision, "ready", view))
         self.window._poll()
 
-    def test_execution_and_stop_are_permanently_disabled_without_commands(self):
+    def test_execution_requires_fresh_preview_and_stop_requires_active_invocation(self):
         for button in (self.window.start_button, self.window.stop_button):
             self.assertTrue(button.instate(["disabled"]))
-            self.assertEqual(str(button.cget("command")), "")
+            self.assertNotEqual(str(button.cget("command")), "")
             button.invoke()
         self.assertEqual(self.controller.requests, [])
         self.deliver(synthetic_view())
@@ -91,7 +91,7 @@ class PreviewWindowTests(unittest.TestCase):
     def test_existing_run_picker_selects_read_only_mode(self):
         with patch("nano_batch.preview_gui.filedialog.askdirectory", return_value="synthetic \u0442\u0435\u0441\u0442 run") as dialog:
             self.window.choose_run()
-        self.assertEqual(self.window.mode.get(), "Existing run (read only)")
+        self.assertEqual(self.window.mode.get(), "Existing run")
         self.window.preview()
         request = self.controller.requests[-1]
         self.assertTrue(request.existing)
@@ -112,7 +112,7 @@ class PreviewWindowTests(unittest.TestCase):
         self.assertIn("Total Orders: 2", self.window.summary.get())
         self.assertIn("Pending: 2", self.window.summary.get())
         self.assertEqual(len(self.window.table.get_children()), 2)
-        self.assertIn("authorizes no execution", self.window.status.get())
+        self.assertIn("requires confirmation", self.window.status.get())
 
     def test_input_edits_clear_previously_displayed_results(self):
         for variable in (self.window.prompt_file, self.window.run_dir, self.window.mode):
@@ -206,7 +206,7 @@ class PreviewWindowTests(unittest.TestCase):
         with patch("nano_batch.preview_gui.tk.Tk", side_effect=tk.TclError("synthetic private desktop detail")), \
              redirect_stderr(StringIO()) as errors:
             self.assertEqual(gui.main(), 2)
-        self.assertIn("Preview GUI unavailable", errors.getvalue())
+        self.assertIn("GUI unavailable", errors.getvalue())
         self.assertNotIn("private", errors.getvalue())
 
     def test_real_entry_point_runs_and_closes_without_browser_import(self):

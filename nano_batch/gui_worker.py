@@ -1,4 +1,4 @@
-"""Private one-job worker. Not connected to any Stage 4B GUI control."""
+"""Private one-job worker. All browser execution stays on its main thread."""
 
 from __future__ import annotations
 
@@ -12,7 +12,8 @@ from types import SimpleNamespace
 
 from .cancellation import authoritative_cancellation_scope, cancellation_checkpoint, interruptible_call
 from .execution_lock import ExecutionBusy, ExecutionLockUnavailable, execution_ownership
-from .preview import PreviewRequest, PreviewState, _paths, present_plan
+from .gui_execution import StalePreview, authorization_digest, execution_fingerprint
+from .preview import PreviewError, PreviewRequest, PreviewState, _paths, present_plan
 from .progress import ProgressReporter, _error_code
 from .worker_protocol import (
     MAX_FRAME, JobMode, JobRequest, StopRequest, decode_request, encode,
@@ -110,11 +111,17 @@ def run_job(request: JobRequest | StopRequest, offer, stop: StopBridge, *, adapt
                 from .runner import execute_sequential_batch, plan_sequential_batch
                 from .power import windows_execution_state_guard
 
-                _paths(PreviewRequest(request.prompt_file, request.run_dir, run_dir.exists()))
+                preview_request = PreviewRequest(request.prompt_file, request.run_dir, run_dir.exists())
+                _paths(preview_request)
+                before = execution_fingerprint(preview_request, Path(request.config_file)) if request.expected_snapshot else None
                 batch = load_prompts_file(Path(request.prompt_file))
                 config = app._load_config(request.config_file)
                 settings = app._generation_settings(config, variants_override=PROMPT_WRAPPER_VARIANTS)
                 view = present_plan(plan_sequential_batch(batch, run_dir, settings))
+                if request.expected_snapshot:
+                    after = execution_fingerprint(preview_request, Path(request.config_file))
+                    if before != after or authorization_digest(after, view) != request.expected_snapshot:
+                        raise StalePreview()
                 total, completed = len(view.rows), view.count(PreviewState.COMPLETED)
                 offer(preview_message(view))
                 cancellation_checkpoint("worker_plan_ready")
@@ -142,6 +149,13 @@ def run_job(request: JobRequest | StopRequest, offer, stop: StopBridge, *, adapt
             outcome, exit_code, code = "blocked", 2, "OWNERSHIP_BUSY"
         except ExecutionLockUnavailable:
             outcome, exit_code, code = "blocked", 2, "OWNERSHIP_UNAVAILABLE"
+        except StalePreview:
+            outcome, exit_code, code = "blocked", 2, "STALE_PREVIEW"
+        except PreviewError:
+            outcome, exit_code, code = (
+                ("blocked", 2, "STALE_PREVIEW") if isinstance(request, JobRequest) and request.expected_snapshot else
+                ("failed", 2, "OPERATION_FAILED")
+            )
         except Exception as exc:
             code = _error_code(exc)
             outcome, exit_code = (

@@ -1,30 +1,49 @@
 # Private GUI worker contract — version 1
 
-Stage 4C infrastructure is separate from the Stage 4B Tk window. Its Start/Resume
-and Stop buttons remain disabled without callbacks. There is no GUI batch worker,
-browser launch, execution confirmation or active-run cancellation interface yet.
-This protocol is private implementation detail, not a public automation API.
+Stage 4D connects the Stage 4C infrastructure to the Tk window. Confirmed
+Start/Resume uses one supervised worker; Stop stays cooperative. GUI Chrome launch
+remains disabled because the protocol has no launch operation. This protocol is
+private implementation detail, not a public automation API.
 
 ## Process and authority
 
 `WorkerProcess` takes an absolute Python executable and starts
 `python -B -u -m nano_batch.gui_worker` with `shell=False`, explicit arguments and
 the repository as working directory. On Windows it creates no console window and
-uses a separate process group. A future UI must create/supervise it away from Tk
-callbacks and drain messages on the UI thread. The current GUI imports none of
-these modules. Each worker accepts at most one explicitly submitted job.
+uses a separate process group. The GUI creates/supervises it away from Tk
+callbacks and drains bounded messages on the UI thread. Each worker accepts at
+most one explicitly submitted job.
 
 Job input has exactly `v`, `type=job`, `mode=preview|execute`, `prompt_file`,
-`run_dir`, and `config_file`. Paths are private inputs, not diagnostics; execution
-requires absolute paths. There is no raw prompt payload, arbitrary shell command,
+`run_dir`, and `config_file`, plus optional `expected_snapshot`. Paths are private
+inputs, not diagnostics; execution requires absolute paths. There is no raw prompt
+payload, arbitrary shell command,
 adapter selector, automatic Retry flag or configuration mutation message.
 The worker reuses application configuration parsing, the x1 text parser, the
 validated planner and `execute_sequential_batch()`. Flow and Playwright remain on
 its main thread. Existing automatic retry budgets remain entirely runner-owned;
 there is no interactive policy-recovery editor or manual Retry in this backend.
 
-An execution job can consume credits. Merely starting a worker cannot. No current
-GUI action sends an execution job, and tests inject fake adapters only.
+An execution job can consume credits. Merely starting a worker cannot. The GUI
+sends execution only after fresh Preview and explicit credit/retry confirmation.
+Tests inject fake adapters only; Stage 4D has no live Flow acceptance.
+
+The optional `expected_snapshot` is exactly 64 lowercase hexadecimal characters.
+It binds the configured Preview's private prompt/state/configuration fingerprints,
+run identity and displayed plan decisions. It is neither a credential nor a
+persisted record and is never diagnostic output. GUI jobs always include it.
+The supervisor revalidates before spawning; the worker verifies it again under
+execution ownership, before adapter creation or any state write. Old internal
+Stage 4C requests without the optional field remain decodable. Version 1, the
+8 KiB frame bound, output schemas and existing exit codes are preserved.
+`STALE_PREVIEW` is an additional allowlisted blocked code. Invalidated or corrupt
+inputs fail closed; no manual Retry is implied. Configuration helpers are shared
+without importing the browser adapter into the GUI.
+
+Input/state/configuration changes clear Preview authorization; confirmation also
+rechecks the current GUI selection after the modal dialog. Asset-dependent plans
+are revalidated before execution. These checks do not eliminate nonparticipating
+filesystem changes between validation and later operations.
 
 ## Framing and bounded reporting
 
@@ -60,7 +79,7 @@ bounded two-second terminal delivery drain, not a browser recovery wait.
 The protocol uses a dedicated noninheritable descriptor. Both ordinary stdout
 and stderr are redirected at the OS level, containing native writes as well as
 Python prints. CLI prints, warnings, SDK output and raw exceptions are not relayed
-as diagnostics. Messages contain no prompts, candidate/project UUIDs,
+as diagnostics. Worker diagnostics contain no prompts, candidate/project UUIDs,
 browser URLs, credentials or arbitrary paths. The supervisor never renders
 malformed raw frames. A terminal frame alone is insufficient: EOF and matching
 process exit are required; trailing output, a crash or exit mismatch reports lost
@@ -75,6 +94,15 @@ SDK error after Stop remains interruption; real SIGINT still raises immediately
 and retains the first signal. No asynchronous exception is injected into a later
 operation. The completion boundary serializes final Stop observation with disabling
 that request source; duplicate and late requests cannot cancel unrelated work.
+
+The GUI supervisor remains active until actual worker exit and closed handles,
+including after protocol failure. It drains the bounded final mailbox even if
+process exit preceded message consumption. 100% progress is not terminal success;
+a crash after a success frame still means uncertain outcome. There is no automatic
+restart or replacement invocation. Each invocation owns a fresh Stop Event.
+Closing the window offers either continuing or Stop-and-close-after-exit; no
+normal close abandons the worker. The supervisor thread is non-daemon, and an
+exceptional GUI main-loop unwind requests Stop and waits for supervision cleanup.
 
 An operation blocked inside the SDK may not return promptly. Stop acknowledgement
 must remain pending until unwind actually completes. `WorkerProcess.close()`

@@ -2784,3 +2784,107 @@ decorators/imports; the GUI/Preview, state schema, browser, download, launcher a
 progress modules remain unchanged. No existing regression tests were weakened or
 removed. Windows lock/process probes were performed offline; POSIX fallback and
 real Flow worker operation are not claimed as live acceptance.
+
+
+## 2026-10-18 — Stage 4D execution-capable Windows GUI
+
+The developer authorized connecting the approved Stage 4C backend to the Tk
+interface, with fresh Preview, explicit credit/retry confirmation, shared
+execution ownership and cooperative Stop. Codex implemented this integration and
+synthetic regression coverage. This entry records offline implementation; no
+Stage 4D live Flow acceptance was performed or inferred from Stage 4B Preview
+acceptance or the earlier CLI acceptance milestones.
+
+The GUI keeps Preview on its read-only thread and launches/supervises a one-job
+worker on a separate non-daemon thread. Browser and runner work remain on the
+worker main thread. Tk receives only bounded typed plan/progress/outcome facts;
+raw terminal output is not parsed or forwarded. Generation saved, downloading,
+Order finalization and verified worker completion remain distinct. The table is
+labeled as the earlier Preview snapshot; live activity and completed counts have
+a separate display. 100% finalized Orders never substitutes for verified exit.
+
+Preview uses the same x1 configuration parsing and planner as execution. Two
+browser-free parsing helpers moved out of app.py without changing their logic.
+A private transient digest binds prompt/state/configuration fingerprints, run
+identity and displayed asset-dependent plan decisions. The supervisor revalidates
+before spawn; the worker verifies it again inside existing execution ownership,
+before adapter creation or state mutation. Changed evidence rejects the old
+Preview. The optional bounded expected_snapshot job field preserves decoding of
+older internal version-1 requests; it is not an authentication credential or
+persisted field and never appears as diagnostic output. Manual Retry is never
+authorized by this GUI. Existing automatic retry budgets remain runner-owned.
+
+Stop is idempotent and remains pending until the existing cancellation path
+unwinds. Inputs and execution actions stay disabled while a worker exists,
+including after malformed output or communication loss. Normal close offers
+continuing or Stop-and-close-after-exit, without forced termination or abandoned
+supervision. Each invocation gets a fresh Stop source, and previous authorization
+is consumed. A blocked SDK call can still delay Stop indefinitely. Exceptional
+GUI main-loop unwind requests Stop and waits for supervision cleanup.
+
+The dedicated Chrome launch button stays disabled: the private protocol has no
+supported launch operation, so users launch Chrome separately through run.bat,
+then select settings and authenticate manually. Open output folder is explicit
+and scoped to the selected saved run, rejecting redirected assets folders. Safe
+GUI diagnostics contain fixed phases, numeric facts and allowlisted codes only.
+No persistent diagnostic log, dependency, state field, Flow DOM read or browser
+poll was added. Browser, runner, ownership/retry decisions, downloads, cancellation,
+locks, progress and launcher modules remain unchanged.
+
+Known limits remain: this text GUI is x1, external x2 batch identity is not guessed,
+minimized Chrome is unsupported, acknowledged generation without durable ownership
+stays blocked, and nonparticipating writers/filesystem races are not eliminated
+by the snapshot checks or cooperative locks. Stage 4D execution and Stop still
+need user-operated acceptance. Development used fake adapters and disposable
+fixtures only, without private checkout, real runs, images, profiles, Chrome,
+CDP, Google Flow or generation credits. An initial junction probe was denied by
+the sandbox; the unchanged fixture passed when the native Windows probe was
+permitted. No regression was skipped to bypass that permission boundary.
+
+
+The initial integration snapshot passed 1,588 offline tests, but final review
+then reproduced a GUI-entry cancellation gap: console Ctrl+C during active
+supervision requested Stop correctly yet returned 0 after the worker exited.
+A retained regression failed with 0 instead of 130 before correction; inactive
+GUI interruption already returned 130. The GUI now remembers that interrupt
+through cooperative cleanup and returns 130. Both cases passed afterward. This
+changes only the GUI entry return status; the worker cancellation latch, runner
+and existing CLI exit behavior remain unchanged. Final suites were repeated on
+the corrected snapshot rather than relying on the earlier full-suite result.
+
+
+Final review continued on 2026-10-19. A second retained regression reproduced
+completion during the active-window close confirmation: nested Tk events could
+consume the completion before the user chose Stop-and-close, leaving the window
+open despite verified child exit. The close path now rechecks release after the
+modal choice and closes immediately when requested and safe. The regression
+failed before the two-line correction and passed afterward. It never closes an
+active child or changes runner cleanup. Final verification below uses the source
+snapshot containing both GUI lifecycle corrections.
+
+
+Final Stage 4D verification (2026-10-19): 156 focused GUI/Preview/worker/protocol/
+locking regressions passed in 37.738 seconds. The complete offline suite passed
+1,591 tests in 321.169 seconds with no failures or skips. All 85 Python source/test
+files matched the final lifecycle-corrected snapshot; completed logs and hashes
+were rechecked after interruption, without rerunning unchanged tests. Four
+publication-security checks, Python compilation, three unchanged observer
+JavaScript syntax checks and Git whitespace checks passed. Static comparison
+confirmed that the two shared configuration helper bodies are AST-identical to
+the baseline, with all other CLI logic unchanged, and that the browser adapter,
+runner, state schema, downloads, cancellation, locks, progress and launcher files
+remain unchanged. The final scope is 14 source, test and documentation files.
+No live acceptance, packaging, private artifact inspection or paid generation
+is claimed by this verification.
+
+
+The final staged whitespace check then found an extra blank line at EOF in the
+new configuration module; the earlier working-tree diff check did not cover that
+untracked file. Only trailing newline bytes were removed. AST equality was
+verified before/after, with the other 84 source/test hashes still matching the
+full-suite manifest. After this formatting-only cleanup, 134 affected CLI,
+configured-Preview, GUI execution and worker tests passed in 35.476 seconds;
+Python compilation passed again. The full suite was not unnecessarily repeated
+for an unchanged syntax tree. The original full-run manifest and a separate
+publication manifest retain this distinction. Staged whitespace and all four
+publication-security checks were repeated before commit.

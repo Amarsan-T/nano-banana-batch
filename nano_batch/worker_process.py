@@ -135,6 +135,10 @@ class WorkerProcess:
             values.append(value)
         return tuple(values)
 
+    def wait_message(self, timeout=0.1):
+        """Supervisor thread only; bounded wait, never a Tk callback."""
+        return self._messages.take(timeout)
+
     def close(self) -> bool:
         """Release handles only after exit. Active workers receive Stop, never kill.
 

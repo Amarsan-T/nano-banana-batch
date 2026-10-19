@@ -58,6 +58,7 @@ ERROR_MESSAGES = {
     "unavailable": "Preview could not read the selected inputs. Check local permissions and try again.",
     "changed": "Inputs or saved state changed. Preview again; the previous plan is no longer current.",
     "unexpected": "Preview is unavailable. No execution or repair was attempted.",
+    "configuration": "Configuration could not be validated. Check config.json with the existing CLI; no execution was attempted.",
 }
 
 
@@ -182,7 +183,7 @@ def preview_fingerprint(request: PreviewRequest) -> tuple:
     )
 
 
-def evaluate_preview(request: PreviewRequest) -> PreviewResult:
+def evaluate_preview(request: PreviewRequest, settings: GenerationSettings | None = None) -> PreviewResult:
     """Read exactly the production prompt-wrapper input and validated planner."""
     try:
         before = preview_fingerprint(request)
@@ -194,7 +195,7 @@ def evaluate_preview(request: PreviewRequest) -> PreviewResult:
             raise PreviewError("prompt_content") from None
         try:
             plan = plan_sequential_batch(
-                batch, Path(request.run_dir), GenerationSettings(variants=PROMPT_WRAPPER_VARIANTS),
+                batch, Path(request.run_dir), settings or GenerationSettings(variants=PROMPT_WRAPPER_VARIANTS),
             )
             view = present_plan(plan)
         except (ValueError, KeyError, TypeError, OSError, RuntimeError):
@@ -217,6 +218,7 @@ class PreviewMessage:
     kind: str
     view: PreviewView | None = None
     code: str | None = None
+    fingerprint: tuple | None = field(default=None, repr=False)
 
 
 class PreviewController:
@@ -308,7 +310,7 @@ class PreviewController:
                 continue
             try:
                 result = self._evaluate(request)
-                self._publish(PreviewMessage(revision, "ready", view=result.view))
+                self._publish(PreviewMessage(revision, "ready", view=result.view, fingerprint=result.fingerprint))
                 current = (revision, request, result.fingerprint)
             except PreviewError as exc:
                 self._publish(PreviewMessage(revision, "error", code=exc.code))
