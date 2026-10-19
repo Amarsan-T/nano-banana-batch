@@ -2888,3 +2888,50 @@ Python compilation passed again. The full suite was not unnecessarily repeated
 for an unchanged syntax tree. The original full-run manifest and a separate
 publication manifest retain this distinction. Staged whitespace and all four
 publication-security checks were repeated before commit.
+
+## Windows GUI text-editing shortcuts (2026-10-19)
+
+The developer reported failed editing shortcuts with a non-English Windows
+layout during user-operated GUI acceptance and authorized this focused fix.
+Codex inspected Tk 8.6.15 on Windows: the two path fields used plain ttk.Entry,
+whose clipboard virtual events depend on Latin key symbols and whose class has
+no Undo/Redo bindings or native undo option. A retained regression failed on the
+unchanged application: Undo left the latest path edit intact. Windows/Tk source
+inspection establishes that key symbols can depend on layout while the event
+keycode remains a Windows virtual key. A read-only native translation probe used
+already loaded EN/RU layouts and synthetic keys only, without changing layouts
+or capturing input. Ctrl+A/C/V/X/Y/Z translated to control characters; Tk's
+letter-key fallback removes Control before resolving the layout-dependent symbol.
+This explains why Latin-symbol bindings are insufficient for Russian layouts.
+
+Codex implemented widget-local virtual-key dispatch for the prompt-file and
+run-folder entries. Native Tk clipboard operations execute once and stop further
+class dispatch. Ordinary Unicode input/navigation, other controls, dialogs and
+other applications keep their existing bindings. Disabled fields cannot act;
+read-only fields allow Copy/Select all only. A bounded, transient history adds
+Undo/Redo, groups native selection replacement, honors validation and rolls back
+validation errors without consuming history. Existing StringVar traces invalidate
+Preview on edits and history restoration; no saved state or worker/engine logic
+changed. History contains local field values only, is never logged or persisted,
+and is discarded on widget destruction.
+
+Synthetic tests use disposable Tk windows, EN/RU event substitutions and a mocked
+Tcl clipboard. They do not read or modify the Windows clipboard, activate an OS
+layout, inject system-wide keys, open real files or connect to Chrome/Flow. The
+new helper's validator-error regression also failed before its rollback guard
+and passed after correction. Final verification totals are recorded below.
+Physical-key user acceptance with both layouts remains pending; arbitrary custom
+keyboard remappers and other desktop/Tk environments are not established by these
+tests. No live generation, paid operation or private-checkout access occurred.
+
+Final verification: 27 new shortcut regressions passed; the focused GUI/Preview,
+worker/protocol/locking and CLI/launcher selection passed 282 tests in 61.183
+seconds. The complete offline suite passed 1,618 tests in 452.431 seconds without
+failures or skips. All 87 Python source/test hashes matched the tested snapshot.
+Four publication-security checks, Python compilation, three unchanged observer
+JavaScript syntax checks, file-scope review and Git whitespace checks passed.
+The only application integration is replacing the two path Entry constructors;
+browser, runner, persistence, ownership, retries, cancellation and worker protocol
+remain unchanged. The original Undo regression was observed failing before the
+fix, then passing afterward. Clipboard effects in tests were confined to mocked
+Tcl commands, not the operating-system clipboard.

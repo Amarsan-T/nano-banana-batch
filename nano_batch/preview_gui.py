@@ -14,6 +14,7 @@ from .gui_execution import (
     ExecutionController, authorization_digest, execution_preview_controller, output_folder,
 )
 from .worker_protocol import validate_message
+from .entry_shortcuts import EditingEntry
 
 
 _PHASES = {
@@ -85,7 +86,7 @@ class PreviewWindow:
         ttk.Label(frame, text="Preview is read-only and free. Start / Resume requires confirmation and may consume Flow credits.", wraplength=1000).grid(
             row=0, column=0, columnspan=3, sticky="w", pady=(0, 12))
         ttk.Label(frame, text="Prompt text file:").grid(row=1, column=0, sticky="w")
-        entry = ttk.Entry(frame, textvariable=self.prompt_file)
+        entry = EditingEntry(frame, textvariable=self.prompt_file)
         entry.grid(row=1, column=1, sticky="ew", padx=8)
         chooser = ttk.Button(frame, text="Choose file...", command=self.choose_prompts)
         chooser.grid(row=1, column=2)
@@ -98,7 +99,7 @@ class PreviewWindow:
         chooser.grid(row=2, column=2)
         self._inputs.extend((self.mode_box, chooser))
         ttk.Label(frame, text="Run folder path:").grid(row=3, column=0, sticky="w")
-        entry = ttk.Entry(frame, textvariable=self.run_dir)
+        entry = EditingEntry(frame, textvariable=self.run_dir)
         entry.grid(row=3, column=1, columnspan=2, sticky="ew", padx=8)
         self._inputs.append(entry)
         ttk.Label(frame, text="Manually select Image mode | Nano Banana 2.1 (or a valid image model) | 16:9 | x1 | 1K Original size.\nKeep dedicated Chrome maximized, optionally behind other apps. Minimized Chrome is unsupported.", wraplength=1000).grid(

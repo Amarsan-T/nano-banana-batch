@@ -361,6 +361,17 @@ uses x1. External x2 batch JSON still belongs to the existing CLI and original
 batch; the GUI does not guess its identity from a text file. No Flow setting is
 changed automatically. The normal CLI and `run.bat` remain available.
 
+The prompt-file and run-folder fields support Ctrl+C/V/X/Z/Y/A (Copy, Paste,
+Cut, Undo, Redo, Select all) with standard English and Russian Windows layouts.
+Windows virtual-key codes select these actions independently of translated
+characters. Bindings belong only to these fields; other controls and file dialogs
+retain their normal behavior. Undo/Redo history is local to each window, limited
+to 100 edits and 131,072 characters per history stack, and cleared on close.
+An edit exceeding that character limit clears history. Typing, pasting and
+Undo/Redo invalidate the displayed Preview and require a new Preview before Start.
+These shortcuts have synthetic offline coverage; physical-key acceptance under
+both layouts still requires user verification. No system-wide key hook is used.
+
 Preview runs on a read-only thread; the table shows at most 100 Orders per page.
 Input edits clear authorization immediately, and nominal one-second background
 checks rehash prompt/state/configuration files. Slow filesystems can delay change
