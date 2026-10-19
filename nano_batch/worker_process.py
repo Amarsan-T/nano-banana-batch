@@ -1,4 +1,4 @@
-"""Private subprocess supervisor, not wired to the Preview-only GUI."""
+"""Private subprocess supervisor for source and frozen GUI execution."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from .worker_protocol import (
     MAX_FRAME, JobRequest, StopRequest, decode_message, encode, message,
 )
 from .worker_transport import MessageBuffer
+from .runtime_paths import worker_launch
 
 
 class WorkerProcess:
@@ -22,9 +23,7 @@ class WorkerProcess:
     """
 
     def __init__(self, executable: Path):
-        executable = Path(executable)
-        if not executable.is_absolute() or not executable.is_file():
-            raise ValueError("An explicit Python executable is required.")
+        command, directory = worker_launch(executable)
         self._messages = MessageBuffer()
         self._outgoing = Queue(maxsize=2)  # one job, one idempotent Stop
         self._lock = threading.Lock()
@@ -36,8 +35,7 @@ class WorkerProcess:
         self._reader_done = threading.Event()
         flags = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
         self.process = subprocess.Popen(
-            [str(executable), "-B", "-u", "-m", "nano_batch.gui_worker"],
-            cwd=str(Path(__file__).resolve().parents[1]), shell=False,
+            command, cwd=str(directory), shell=False,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             bufsize=0, creationflags=flags,
         )

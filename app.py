@@ -43,10 +43,11 @@ from nano_batch.runner import (
 )
 from nano_batch.state import RunStateStore
 from nano_batch.adapters.flow import FLOW_HOME_URL, FlowSession
+from nano_batch.runtime_paths import DEFAULT_PATH, config_path, launcher_directory, runs_directory, runtime_path
 
 
 def _default_run_dir(batch_id: str) -> Path:
-    return Path("runs") / batch_id.split(":", 1)[-1][:16]
+    return runs_directory() / batch_id.split(":", 1)[-1][:16]
 
 
 def _flow_session_from_args(args: argparse.Namespace, config: dict) -> FlowSession:
@@ -55,17 +56,23 @@ def _flow_session_from_args(args: argparse.Namespace, config: dict) -> FlowSessi
         or config.get("flow_url")
         or "https://flow.google.com"
     )
-    profile_dir = Path(
+    profile_dir = runtime_path(
         getattr(args, "profile_dir", None)
-        or config.get("browser_profile_dir", ".flow_chrome_profile")
+        or config.get("browser_profile_dir", DEFAULT_PATH),
+        source_default=".flow_chrome_profile", packaged_default="chrome-profile",
+        config_file=getattr(args, "config", None),
+        from_argument=bool(getattr(args, "profile_dir", None)),
     )
     debug_address = getattr(args, "debug_address", None) or config.get(
         "debug_address", "127.0.0.1"
     )
     debug_port = getattr(args, "debug_port", None) or config.get("debug_port", 9222)
-    diagnostics_path = Path(
+    diagnostics_path = runtime_path(
         getattr(args, "screenshot", None)
-        or config.get("diagnostics_path", "diagnostics/flow_inspect.png")
+        or config.get("diagnostics_path", DEFAULT_PATH),
+        source_default="diagnostics/flow_inspect.png", packaged_default="diagnostics/flow_inspect.png",
+        config_file=getattr(args, "config", None),
+        from_argument=bool(getattr(args, "screenshot", None)),
     )
     prestart_timing_debug = config.get("prestart_timing_debug", False)
     if not isinstance(prestart_timing_debug, bool):
@@ -412,7 +419,7 @@ def cmd_run_prompts_file(args: argparse.Namespace) -> int:
 
 def cmd_launcher(args: argparse.Namespace) -> int:
     _configure_unicode_cli_output()
-    project_dir = Path(__file__).resolve().parent
+    project_dir = launcher_directory(Path(__file__).resolve().parent)
 
     def retry_snapshot(
         prompts_path: Path,
@@ -1298,7 +1305,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--timeout", type=int, help="Override per-order generation timeout in seconds.")
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1319,7 +1326,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--timeout", type=int, help="Override generation timeout in seconds.")
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1340,7 +1347,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly retry a failed or interrupted generation; downloads resume automatically.",
     )
     p.add_argument("--timeout", type=int, help="Override per-order generation timeout in seconds.")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1352,7 +1359,7 @@ def build_parser() -> argparse.ArgumentParser:
         "launcher",
         help="Open the interactive Windows prompt-batch launcher.",
     )
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1380,7 +1387,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_repair_order_candidates)
 
     p = sub.add_parser("open-flow", help="Open normal Chrome for manual Flow authentication.")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.set_defaults(func=cmd_open_flow)
@@ -1389,7 +1396,7 @@ def build_parser() -> argparse.ArgumentParser:
         "open-flow-debug",
         help="Open normal Chrome with loopback-only debugging for Playwright attachment.",
     )
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1397,7 +1404,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_open_flow_debug)
 
     p = sub.add_parser("inspect-flow", help="Read visible Flow UI metadata without submitting a prompt.")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1409,7 +1416,7 @@ def build_parser() -> argparse.ArgumentParser:
         "inspect-flow-project-ui",
         help="Report bounded project-creation/navigation UI evidence without interaction.",
     )
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1426,7 +1433,7 @@ def build_parser() -> argparse.ArgumentParser:
         "inspect-current-flow-project",
         help="Report current Flow project identity/editor readiness without interaction.",
     )
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1443,7 +1450,7 @@ def build_parser() -> argparse.ArgumentParser:
         "inspect-flow-download-layout",
         help="Report bounded window and candidate-toolbar layout evidence without interaction.",
     )
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1460,7 +1467,7 @@ def build_parser() -> argparse.ArgumentParser:
         "inspect-flow-model-menu",
         help="Inspect an already-open Flow model menu without interaction.",
     )
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1485,7 +1492,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--timeout", type=int, help="Override result timeout in seconds.")
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1505,7 +1512,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly replace deterministic candidate files, including valid downloads.",
     )
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1538,7 +1545,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Explicitly authorize exactly one real Download activation for the selected candidate.",
     )
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1564,7 +1571,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Arm passive observers and wait for the user's one physical Download action.",
     )
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1580,7 +1587,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--variant", type=int, required=True)
     p.add_argument("--timeout", type=int, default=30)
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")
@@ -1614,7 +1621,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Authorize harmless candidate hover/menu actions that stop before 1K activation.",
     )
     p.add_argument("--run-dir")
-    p.add_argument("--config", default="config.json")
+    p.add_argument("--config", default=str(config_path()))
     p.add_argument("--url")
     p.add_argument("--profile-dir")
     p.add_argument("--debug-address")

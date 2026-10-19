@@ -3094,3 +3094,98 @@ checks, so the declared `playwright>=1.60,<2` minimum is retained. This does not
 validate every allowed dependency version, other Python versions, a clean Windows
 installation, actual Chrome/CDP behavior or real Flow at 1.60.0. The private
 checkout, authenticated profiles and real run artifacts were not accessed.
+
+## Stage 5B — internal Windows one-folder prototype (2026-10-19)
+
+The developer approved the Stage 5A architecture and authorized an internal x64
+one-folder prototype, isolated build dependencies, synthetic verification and
+source-only publication. The developer separately reported successful source-GUI
+generation/download, skip-only Resume, cooperative Stop (130), download-only
+Resume and physical English/Russian shortcuts. These are user-operated acceptance
+observations, not Codex-run tests or evidence for the frozen build.
+
+Codex implemented three explicit entry points sharing one PyInstaller resource
+folder: a windowed GUI, a separately supervised console-mode worker and a CLI
+companion. Source workers still use Python's module entry; frozen workers use the
+exact sibling executable without recursive GUI launch. Private protocol pipes,
+bounded messages, locks and cooperative Stop are unchanged. No Flow adapter,
+runner, state schema, ownership, generation/download or retry logic changed.
+
+Frozen defaults use independent writable application data, with an explicit
+directory override. Startup and Preview do not create it. Confirmed first setup
+creates defaults exclusively without replacing configuration or migrating runs
+or profiles. Source relative paths remain compatible. Chrome bootstrap and output
+opening use fixed, hidden CLI companion actions; Windows external-program DLL
+search restoration is confined to that CLI process. No Chrome was launched during
+implementation. Existing loopback restrictions, manual login/settings and the
+unsupported minimized-window policy remain in force.
+
+The isolated build environment pins twelve distributions with wheel hashes,
+including PyInstaller 6.22.3, Playwright 1.64.0 and Pillow 12.3.0 on Python 3.12.10.
+All 1,537 working `.venv` file hashes remained unchanged. A shared Analysis/PYZ
+bundles Python, Tcl/Tk, Pillow and Playwright's Node/driver, with no browser binary
+or authenticated data. Forty-one dependency notice files and project MIT licensing
+are retained. The missing installed Tcl notice is supplied unmodified from the
+official Tcl 8.6.15 source, with its digest verified by the build script.
+
+The artifact scanner checks files and executable/stdlib Python code constants.
+An initial home-path match proved to be the exact upstream `ntpath.splitroot`
+documentation example embedded in the unchanged CPython DLL and stdlib. Only that
+complete public string is exempted; regression tests still reject arbitrary
+home paths and secret patterns without printing matches. Build metadata records
+the actual base commit, modified-tree flag, dependency versions and relative
+source hashes; checksums do not imply a signature or bit-for-bit reproducibility.
+
+An initial full regression run exposed a source-launcher path delegation defect:
+the new helper bypassed the existing mocked entry-point root in two policy tests.
+That invalid isolation caused read-only discovery of existing public-workspace
+prompt/run metadata; no batch execution or runtime write was selected. No prompt
+content or runtime artifact is added to public documentation. Codex reproduced
+the root mismatch with a focused test, restored caller-derived source resolution
+and retained independent frozen defaults. All 114 packaging/launcher/policy tests
+then passed. The final suite adds a guard against existing runtime access, browser
+launch and endpoint connections. The private checkout was never accessed.
+
+Synthetic packaged verification uses a separate test-only worker build; its fake
+adapter is absent from the application artifact. A deeply nested disposable copy
+initially exceeded Windows path limits; the read-only installation probe uses a
+shorter confined Unicode/spaces location. This is not a general path-limit fix.
+
+Remaining gates include clean Windows without installed Python, user-operated
+packaged Chrome/Flow acceptance, Defender/SmartScreen behavior and signing. No
+installer, migration, update or public binary release is implemented. A blocked
+SDK call can still delay cooperative Stop; acknowledged generations without
+durable ownership remain blocked. Existing filesystem/concurrency/power-loss
+limitations remain. Synthetic acceptance does not prove arbitrary-scale safety.
+
+Final verification passed 1,665 full-suite tests in 360.473 seconds and 298 focused
+packaging/GUI/worker/launcher/policy regressions in 74.540 seconds, with zero
+failures, errors or skips. Both guarded runs recorded no existing runtime-data,
+browser-launch or endpoint-connection attempts. Python compilation, three
+unchanged observer JavaScript syntax checks, four publication-security tests and
+whitespace checks passed. The standalone packaged acceptance script was refined
+separately after the full suite; it is not an automatically discovered unit test.
+No application source changed after that full-suite snapshot.
+
+All thirteen final frozen acceptance checks passed: actual windowed startup and
+close, CLI startup, real worker framing/read-only Preview, pre-job Stop (130),
+protocol rejection, synthetic sequential completion and skip-only Resume,
+same-run/shared-Chrome locks, crash/malformed output, delayed-call Stop preserving
+the checkpoint/lock followed by download-only Resume, full synthetic JPEG decode,
+Tcl/Pillow/Playwright driver resources, Unicode/spaces installation and removal
+of Python/Node from child PATH. No authenticated browser or endpoint was used.
+The ACL fixture preserves inherited read/execute permissions while explicitly
+denying file creation and existing-file data writes; both denials were checked,
+then GUI startup/Preview succeeded with unchanged installation hashes. Attempts
+to replace all permissions or deny deletion also blocked reads in this hosted
+environment and were rejected as unsuitable fixtures. This is not clean-machine
+or arbitrary Windows ACL acceptance.
+
+The final local artifact contains 1,171 inventoried files totaling 159,868,505
+bytes before the checksum manifest, or 160,055,868 bytes including it. All three
+executables are x64, the artifact input hashes match the final reviewed build
+sources, and its file/archive/compiled-constant privacy scan passed. Binary output,
+intermediate builds, dependency wheels and environments remain ignored. Only
+reviewed source, tests, build definitions, notices and documentation are eligible
+for the authorized normal fast-forward source publication; no executable, archive
+or GitHub Release is published.

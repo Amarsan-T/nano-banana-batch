@@ -15,6 +15,8 @@ from .gui_execution import (
 )
 from .worker_protocol import validate_message
 from .entry_shortcuts import EditingEntry
+from .runtime_paths import config_path, frozen, prepare_data_home
+from .packaged_tools import CompanionAction
 
 
 _PHASES = {
@@ -50,7 +52,7 @@ class PreviewWindow:
     def __init__(self, root: tk.Tk, *, controller: PreviewController | None = None,
                  execution: ExecutionController | None = None, config_file: Path | None = None):
         self.root = root
-        self.config_file = config_file or Path(__file__).resolve().parents[1] / "config.json"
+        self.config_file = config_file or config_path(gui=True)
         self.controller = controller if controller is not None else execution_preview_controller(self.config_file)
         self.execution = execution if execution is not None else ExecutionController(Path(sys.executable))
         self._authorization = None
@@ -64,7 +66,8 @@ class PreviewWindow:
         self._page = 0
         self._closed = False
         self._after = None
-        root.title("Nano Banana Batch")
+        self._companion = CompanionAction() if frozen() else None
+        root.title("Nano Banana Batch - INTERNAL TEST BUILD" if frozen() else "Nano Banana Batch")
         root.geometry("1080x750")
         root.minsize(760, 560)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -115,6 +118,12 @@ class PreviewWindow:
         self.stop_button.pack(side="left")
         self.chrome_button = ttk.Button(actions, text="Launch Chrome (use run.bat)", state="disabled")
         self.chrome_button.pack(side="left", padx=10)
+        if frozen():
+            self.chrome_button.configure(text="Launch dedicated Chrome", command=self.launch_chrome)
+            self.chrome_button.state(["!disabled"])
+            self.setup_button = ttk.Button(actions, text="Prepare data folders", command=self.prepare_data)
+            self.setup_button.pack(side="left", padx=6)
+            self._inputs.append(self.setup_button)
         self.output_button = ttk.Button(actions, text="Open output folder", command=self.open_output)
         self.output_button.pack(side="left")
         ttk.Label(frame, textvariable=self.summary, wraplength=1000).grid(
@@ -180,7 +189,7 @@ class PreviewWindow:
 
     def choose_prompts(self) -> None:
         self._assert_owner()
-        if self.execution.active:
+        if self.execution.active or self._companion_active():
             return
         selected = filedialog.askopenfilename(parent=self.root, title="Choose a UTF-8 prompt text file",
                                               filetypes=(("Text files", "*.txt"), ("All files", "*.*")))
@@ -189,7 +198,7 @@ class PreviewWindow:
 
     def choose_run(self) -> None:
         self._assert_owner()
-        if self.execution.active:
+        if self.execution.active or self._companion_active():
             return
         selected = filedialog.askdirectory(parent=self.root, title="Open an existing run for Preview", mustexist=True)
         if selected:
@@ -198,7 +207,7 @@ class PreviewWindow:
 
     def preview(self) -> None:
         self._assert_owner()
-        if self.execution.active:
+        if self.execution.active or self._companion_active():
             return
         self._clear()
         self.status.set("Checking prompts, saved state and assets... Preview only.")
@@ -213,10 +222,11 @@ class PreviewWindow:
         self.mode_box.configure(state="disabled" if active else "readonly")
         self.start_button.state(["disabled"])
         self.stop_button.state(["!disabled"] if active and not self._stop_requested else ["disabled"])
+        self.chrome_button.state(["!disabled"] if frozen() and not active else ["disabled"])
 
     def start(self) -> None:
         self._assert_owner()
-        if self.execution.active or self._authorization is None or self._preview_request is None:
+        if self.execution.active or self._companion_active() or self._authorization is None or self._preview_request is None:
             return
         selection, token = self._preview_request, self._authorization
         if not messagebox.askyesno("Confirm Start / Resume", "Generation consumes Google Flow credits. Existing automatic retries may make additional submissions.\n\nCompleted generations are preserved; manual Retry is never authorized here. Dedicated Chrome must already be running with manual login and settings selected.\n\nExecute this validated plan?", parent=self.root):
@@ -250,13 +260,56 @@ class PreviewWindow:
 
     def open_output(self) -> None:
         self._assert_owner()
-        if self.execution.active:
+        if self.execution.active or self._companion_active():
             return
         try:
             # Only an explicit user action opens the selected run's output.
-            os.startfile(str(output_folder(self.run_dir.get())))
+            folder = output_folder(self.run_dir.get())
+            if frozen():
+                self._start_companion("output", Path(self.run_dir.get()).resolve())
+            else:
+                os.startfile(str(folder))
         except Exception:
             self.status.set("Output folder unavailable. Select the completed run; redirected asset folders are not opened.")
+
+    def _companion_active(self) -> bool:
+        companion = getattr(self, "_companion", None)
+        return companion is not None and companion.active
+
+    def _start_companion(self, action, path):
+        self._companion.start(action, path)
+        self.controller.invalidate()
+        self._clear()
+        self._busy(True)
+        self.stop_button.state(["disabled"])
+        self.status.set("Waiting for the explicit companion action; no batch was started.")
+
+    def launch_chrome(self):
+        self._assert_owner()
+        if self.execution.active or self._companion_active() or not frozen():
+            return
+        if messagebox.askyesno("Launch dedicated Chrome", "Launch or reuse dedicated Chrome for manual login? No generation will be submitted. Keep Chrome maximized during batches.", parent=self.root):
+            if self.execution.active or self._companion_active():
+                return
+            try:
+                self._start_companion("chrome", self.config_file)
+            except Exception:
+                self.status.set("Chrome launch unavailable. Check the CLI companion and configuration.")
+
+    def prepare_data(self):
+        self._assert_owner()
+        if self.execution.active or self._companion_active() or not frozen():
+            return
+        if messagebox.askyesno("Prepare application data", "Create application-data folders and default configuration if absent? Existing configuration and runs will not be replaced or migrated.", parent=self.root):
+            if self.execution.active or self._companion_active():
+                return
+            try:
+                prepare_data_home()
+                self.controller.invalidate()
+                self._clear()
+                self.status.set("Application data prepared. Select a prompt file and an unused run folder, then Preview.")
+            except Exception:
+                self.status.set("Application-data setup failed. Check the selected location and permissions.")
 
     def _worker_message(self, value) -> None:
         self._assert_owner()
@@ -316,6 +369,14 @@ class PreviewWindow:
         if self._after is not None:
             self.root.after_cancel(self._after)
             self._after = None
+        if self._companion is not None:
+            companion_result = self._companion.drain()
+            if companion_result is not None:
+                self._busy(False)
+                self.status.set("Companion action finished. For Chrome, complete manual login and settings before Preview." if companion_result else "Companion action failed. Check configuration, ownership and installed Chrome; no batch was started.")
+                if self._close_when_done:
+                    self._destroy()
+                    return
         message = self.controller.drain()
         if message is not None and not self.execution.active:
             self._clear()
@@ -358,6 +419,10 @@ class PreviewWindow:
         self._assert_owner()
         if self._closed:
             return
+        if self._companion_active():
+            self._close_when_done = True
+            self.status.set("Waiting for the companion to exit before closing. No process will be terminated.")
+            return
         if self.execution.active:
             if not self._close_when_done and messagebox.askyesno("Batch is active", "Request a safe Stop and close after the worker exits?\n\nYes: keep supervising until cleanup finishes.\nNo: keep this window open and continue.\n\nA blocked browser operation can delay Stop; no process will be forcibly terminated.", parent=self.root):
                 self._close_when_done = True
@@ -368,7 +433,7 @@ class PreviewWindow:
         self._destroy()
 
     def _destroy(self) -> None:
-        if not self._closed and not self.execution.active:
+        if not self._closed and not self.execution.active and not self._companion_active():
             self._closed = True
             self.controller.close()
             if self._after is not None:
@@ -403,6 +468,10 @@ def main() -> int:
         return 2
     finally:
         if window is not None and not window._closed:
+            companion = getattr(window, "_companion", None)
+            if companion is not None and companion.active:
+                companion.wait()
+                companion.drain()
             if window.execution.active:
                 window.execution.request_stop()
                 window.execution.wait()

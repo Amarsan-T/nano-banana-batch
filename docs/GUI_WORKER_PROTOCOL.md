@@ -1,15 +1,19 @@
 # Private GUI worker contract — version 1
 
 Stage 4D connects the Stage 4C infrastructure to the Tk window. Confirmed
-Start/Resume uses one supervised worker; Stop stays cooperative. GUI Chrome launch
-remains disabled because the protocol has no launch operation. This protocol is
+Start/Resume uses one supervised worker; Stop stays cooperative. Source GUI Chrome
+launch remains disabled. The internal frozen GUI invokes a separate, fixed CLI
+companion action for Chrome bootstrap; the worker protocol has no launch operation. This protocol is
 private implementation detail, not a public automation API.
 
 ## Process and authority
 
-`WorkerProcess` takes an absolute Python executable and starts
+In source mode, `WorkerProcess` takes an absolute Python executable and starts
 `python -B -u -m nano_batch.gui_worker` with `shell=False`, explicit arguments and
-the repository as working directory. On Windows it creates no console window and
+the repository as working directory. In the internal frozen build it resolves
+the exact sibling `NanoBananaBatchWorker.exe`, without treating `sys.executable`
+as Python or searching PATH. The three executables share one resource folder;
+the console-mode worker retains its private pipe handles. On Windows supervision creates no console window and
 uses a separate process group. The GUI creates/supervises it away from Tk
 callbacks and drains bounded messages on the UI thread. Each worker accepts at
 most one explicitly submitted job.
@@ -26,7 +30,8 @@ there is no interactive policy-recovery editor or manual Retry in this backend.
 
 An execution job can consume credits. Merely starting a worker cannot. The GUI
 sends execution only after fresh Preview and explicit credit/retry confirmation.
-Tests inject fake adapters only; Stage 4D has no live Flow acceptance.
+Automated tests inject fake adapters only. Later developer-reported source-GUI
+acceptance is separate evidence; packaged live Flow acceptance remains pending.
 
 The optional `expected_snapshot` is exactly 64 lowercase hexadecimal characters.
 It binds the configured Preview's private prompt/state/configuration fingerprints,

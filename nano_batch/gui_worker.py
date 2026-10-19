@@ -130,7 +130,7 @@ def run_job(request: JobRequest | StopRequest, offer, stop: StopBridge, *, adapt
                 elif view.count(PreviewState.BLOCKED):
                     outcome, exit_code, code = "blocked", 2, None
                 else:
-                    args = SimpleNamespace()
+                    args = SimpleNamespace(config=request.config_file)
                     factory = adapter_factory or app._flow_session_from_args
                     adapter = factory(args, config)
                     reporter = ProgressReporter(tuple(item.order for item in batch.items),

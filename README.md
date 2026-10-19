@@ -315,7 +315,18 @@ existing environment (Python must include Tcl/Tk):
 Preview requires no Chrome and consumes no generation credits. **Start / Resume
 can consume Flow credits**, including additional submissions from the existing
 automatic retry budgets. It requires a fresh Preview and explicit confirmation.
-Stage 4D execution has synthetic offline verification only, not live GUI acceptance.
+Stage 4D initially had synthetic offline verification only. The developer has
+subsequently reported successful source-GUI generation/download, skip-only and
+download-only Resume, cooperative Stop (130), and English/Russian shortcuts.
+These observations do not validate the new packaged prototype.
+
+An optional [internal Windows one-folder prototype](docs/WINDOWS_INTERNAL_BUILD.md)
+provides `NanoBananaBatch.exe`, a separate frozen worker and a CLI companion.
+It is an **INTERNAL TEST BUILD**, not a public binary release or installer.
+Startup and Preview do not create user data; explicit **Prepare data folders**
+creates independent defaults under `%LOCALAPPDATA%\NanoBananaBatch` without
+migrating or replacing existing runs, configuration or browser profiles.
+Packaged live Flow acceptance and clean-machine verification remain pending.
 
 1. Click **Choose file...** and select a UTF-8 prompt text file, one prompt per
    accepted line. For **New run (not created)**, enter a fresh folder beneath an
@@ -329,8 +340,9 @@ Stage 4D execution has synthetic offline verification only, not live GUI accepta
    manually in the dedicated profile. Select Image mode, Nano Banana 2.1 (or a
    valid image model), 16:9, x1 and 1K Original size. Keep that Chrome maximized;
    it may remain behind other applications. Native minimized operation is
-   unsupported. **Launch Chrome in the GUI is disabled**: the current worker
-   protocol has no launch operation, so no shortcut bypasses browser ownership.
+   unsupported. **Launch Chrome in the source GUI is disabled**. The internal
+   frozen GUI uses a separately confirmed CLI companion; the worker protocol
+   has no launch operation and browser ownership checks remain in place.
 5. Click **Start / Resume**, read the credit/retry warning and explicitly confirm.
    The supervisor revalidates the Preview, and the worker repeats validation
    inside the existing run/browser execution locks before calling the runner.
@@ -362,8 +374,9 @@ Stage 4D execution has synthetic offline verification only, not live GUI accepta
    fixed phases, numeric counts and allowlisted codes; raw CLI/SDK output is not
    forwarded. Use existing CLI diagnostics if further recovery review is needed.
 
-The GUI reads repository-local `config.json` through the same browser-free parsing
-helpers as the CLI; absence uses existing defaults. The text workflow always
+The source GUI reads repository-local `config.json` through the same browser-free
+parsing helpers as the CLI; absence uses existing defaults. The internal frozen
+GUI uses its separate application-data configuration as documented above. The text workflow always
 uses x1. External x2 batch JSON still belongs to the existing CLI and original
 batch; the GUI does not guess its identity from a text file. No Flow setting is
 changed automatically. The normal CLI and `run.bat` remain available.
