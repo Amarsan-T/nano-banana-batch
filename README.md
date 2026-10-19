@@ -318,8 +318,9 @@ Chrome does not need to be running for Preview.
    These are planned actions, not actions performed by the GUI.
 
 **Start / Resume and Stop are disabled and have no execution callbacks.** GUI
-execution, downloads, Chrome launching, active-run cancellation and worker-process
-orchestration are not implemented. Preview consumes no generation credits and
+execution, downloads, Chrome launching and active-run cancellation are not
+implemented. The private worker backend below is not connected to these controls.
+Preview consumes no generation credits and
 does not create or repair state, change prompts, reconcile receipts, or modify
 assets. The existing CLI and `run.bat` workflows remain unchanged.
 
@@ -344,6 +345,42 @@ Errors use fixed guidance rather than raw exceptions; no GUI diagnostic log is
 written. Real Tk widgets, responsiveness and read-only behavior are tested with
 synthetic offline fixtures. This is not live Flow acceptance or a packaged Windows
 distribution.
+
+### Private worker infrastructure (Stage 4C)
+
+Stage 4B Windows acceptance was user-operated: the GUI displayed all 20 previously
+completed Orders with zero pending, blocked or download-only items. This is
+reported acceptance evidence, not an independently repeated inspection.
+
+Stage 4C adds a private, one-job Python subprocess backend for a future GUI.
+`nano_batch.worker_process.WorkerProcess` launches the explicit Python executable
+with an argument list and `shell=False`; `nano_batch.gui_worker` owns configuration
+loading and the existing sequential runner on its main thread. Starting the worker
+does not submit a job or launch Chrome. An explicitly submitted backend execution
+job can perform the existing credit-consuming workflow; **the current Tk window
+has no route to submit one**. Continue using the normal CLI/launcher for real runs.
+
+The versioned private pipe protocol carries validated, bounded plan counts,
+progress and terminal outcomes. Raw CLI/SDK output is not forwarded. Stop is
+cooperative: its acknowledgement means **Stop pending**, not stopped or rolled
+back. Existing main-thread cancellation checkpoints consume the request; a blocked
+SDK/browser call may delay it without a finite guaranteed completion time. The
+backend never uses process-tree termination as ordinary Stop and never resubmits
+an acknowledged generation to recover from lost communication. Terminal messages
+are accepted only after a matching process exit. Lost communication requires
+review of durable state through the existing Preview/Resume safeguards.
+
+Mutating CLI and worker paths now share OS-held execution ownership. On Windows,
+named mutexes protect the selected run and a deliberately coarse, machine-wide
+dedicated-browser gate across all configured profiles/ports. A competing command
+fails before executing; read-only batch Preview remains available. Normal unwind
+or process/thread exit releases OS ownership. Do not delete or bypass alleged
+stale locks. POSIX uses local per-user advisory locks; other users, nonparticipating
+programs, other hosts and distributed filesystem coordination are not covered.
+No lock changes browser authentication, repairs saved state, or eliminates
+filesystem races. See [the private worker contract](docs/GUI_WORKER_PROTOCOL.md)
+for limits and lifecycle details. Stage 4C has offline synthetic verification only;
+live GUI execution and Stage 4D remain excluded.
 
 ## Sequential batch progress
 

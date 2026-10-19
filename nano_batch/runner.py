@@ -60,6 +60,7 @@ from .models import (
     RunItemState,
     RunState,
 )
+from .execution_lock import exclusive_run
 from .state import RunStateStore
 from .progress import (
     ProgressPhase, ProgressReporter, flush_progress, progress_scope,
@@ -74,6 +75,7 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+@exclusive_run
 def initialize_run_state(
     batch: Batch,
     run_dir: Path,
@@ -309,6 +311,7 @@ def exhausted_policy_rejection(item: RunItemState) -> bool:
     )
 
 
+@exclusive_run
 def edit_policy_rejected_prompt(
     batch: Batch, run_dir: Path, order: int, replacement: str,
 ) -> None:
@@ -1406,6 +1409,7 @@ def plan_repair_order_candidates(
     )
 
 
+@exclusive_run
 def execute_repair_order_candidates(
     batch: Batch,
     run_dir: Path,
@@ -1565,6 +1569,7 @@ def _cleanup_download_staging(
     shutil.rmtree(staging_dir, onexc=retry_readonly_unlink)
 
 
+@exclusive_run
 def execute_download_one(
     batch: Batch,
     run_dir: Path,
@@ -1791,6 +1796,7 @@ def _result_extension(asset_url: str | None) -> str:
     return "png"
 
 
+@exclusive_run
 def execute_one(
     batch: Batch,
     run_dir: Path,
@@ -2148,6 +2154,7 @@ def execute_one(
         raise
 
 
+@exclusive_run
 def prepare_persisted_flow_project(
     batch: Batch,
     run_dir: Path,
@@ -2396,6 +2403,7 @@ def _prepare_sequential_flow_project(
     return project
 
 
+@exclusive_run
 def execute_sequential_batch(
     batch: Batch,
     run_dir: Path,

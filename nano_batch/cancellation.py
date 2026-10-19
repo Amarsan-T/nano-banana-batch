@@ -39,8 +39,16 @@ class CancellationState:
     blocking_operation_started: bool = False
     blocking_operation_exited: bool = False
     keyboard_interrupt_propagated: bool = False
+    cooperative_stop: threading.Event | None = None
+
+    def observe_cooperative_stop(self) -> None:
+        # Only the execution thread consumes the event. The pipe/control thread
+        # never changes the latch, runtime state, or signal handlers.
+        if not self.requested and self.cooperative_stop is not None and self.cooperative_stop.is_set():
+            self.request()
 
     def checkpoint(self, phase: str) -> None:
+        self.observe_cooperative_stop()
         safe_phase = _safe_phase(phase)
         if not self.requested:
             self.current_phase = safe_phase
@@ -103,6 +111,8 @@ def cancellation_checkpoint(phase: str) -> None:
 
 def cancellation_requested() -> bool:
     state = current_cancellation_state()
+    if state is not None:
+        state.observe_cooperative_stop()
     return bool(state is not None and state.requested)
 
 
@@ -170,6 +180,7 @@ def cancellation_blocking_operation(
         raise
     except BaseException as exc:
         state.blocking_operation_exited = True
+        state.observe_cooperative_stop()
         if state.requested:
             interrupt = state.interrupt()
             interrupt.cancellation_translated_error_type = type(exc).__name__
@@ -227,15 +238,17 @@ def format_cancellation_diagnostics(exc: KeyboardInterrupt) -> str | None:
 
 
 @contextmanager
-def authoritative_cancellation_scope() -> Iterator[CancellationState]:
+def authoritative_cancellation_scope(*, cooperative_stop: threading.Event | None = None) -> Iterator[CancellationState]:
     """Make the first SIGINT both latch cancellation and raise immediately."""
 
     existing = current_cancellation_state()
     if existing is not None:
+        if cooperative_stop is not None and existing.cooperative_stop is not cooperative_stop:
+            raise RuntimeError("A different cooperative Stop source cannot replace an active cancellation scope.")
         yield existing
         return
 
-    state = CancellationState()
+    state = CancellationState(cooperative_stop=cooperative_stop)
     token = _CURRENT_CANCELLATION.set(state)
     installed_handler = False
     previous_handler = None

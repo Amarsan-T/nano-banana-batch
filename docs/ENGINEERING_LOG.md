@@ -2710,3 +2710,77 @@ compilation (including `gui.py`), three unchanged embedded observer JavaScript
 syntax checks and Git whitespace checks passed. All existing tracked Python files
 remain unchanged. A synthetic 5,000-Order layout probe rendered only 100 rows and
 fit the default window dimensions; it provides offline layout evidence only.
+
+## 2026-10-18 — Stage 4C private worker infrastructure
+
+The developer reported successful user-operated Windows acceptance of the Stage
+4B Preview-only GUI: all 20 previously completed Orders were displayed, with zero
+pending, blocked or download-only items. Codex did not inspect those private run
+artifacts or independently repeat that acceptance.
+
+The developer approved the next backend-only deliverable. Codex implemented a
+private one-job worker/supervisor, versioned bounded pipe protocol, cooperative
+Stop source and shared OS execution ownership, with synthetic tests and contract
+documentation. The Tk entry point, widgets and preview controller remain unchanged;
+Start/Resume and Stop have no callbacks. There is no live GUI execution or browser
+launch integration. No dependency or persisted-state field was added.
+
+The worker reuses application configuration parsing and the existing planner and
+sequential runner on its main thread. Allowlisted plan counts/progress/terminal
+facts cross the pipe; private job paths are input only. Output is bounded, progress
+snapshots coalesce, and raw SDK/CLI exceptions and output are not forwarded.
+Readiness, framing and schema checks fail closed. Terminal success additionally
+requires actual EOF and a matching process exit, preventing a terminal frame
+before a crash from masquerading as successful cleanup.
+
+The control thread sets only an Event. The existing cancellation mechanism consumes
+it on the execution thread, including after translated SDK exceptions. Stop is
+idempotent and acknowledged as pending; a blocked SDK operation can delay it.
+No injected asynchronous interrupt, forced termination, state write or retry runs
+on the control thread. Final Stop observation is serialized with deactivation;
+late requests cannot interrupt an unrelated operation. Existing SIGINT behavior,
+exit 130, durable checkpoint/receipt recovery and ownership rules are preserved.
+
+Windows Global named mutexes hold the dedicated-browser gate and selected run;
+CLI browser/execution commands and runner mutation entry points participate.
+The coarse session gate intentionally serializes different profiles/ports/runs,
+while normalized run paths cover tested junction/case aliases. Ownership is
+OS-held through cleanup or owner exit, never inferred from file presence or a
+stale PID. POSIX has a local per-user advisory fallback, without cross-user/host
+or distributed guarantees. Old nonparticipating copies, manual browser activity,
+local adversaries and filesystem races remain outside this protection. Read-only
+Preview stays available while an execution owns the gates.
+
+All execution verification uses fake adapters, synthetic protocol subprocesses
+and disposable fixtures. No private checkout, existing run, Chrome, CDP, Flow,
+profile, authentication or paid generation was accessed. Stage 4C live Flow
+acceptance and execution-capable GUI work remain excluded.
+
+A final adversarial synthetic probe showed that Python-only output redirection
+did not contain native stdout writes or `sys.__stdout__`; those bytes corrupted
+the protocol, which the supervisor rejected without displaying the raw content.
+The new regression failed before correction. The worker now duplicates the
+protocol pipe onto a noninheritable descriptor and redirects ordinary stdout and
+stderr at the OS level. The regression remains, and full validation was repeated
+after this narrow privacy/transport correction.
+
+That repeat exposed a timing assumption in the new blocked-SDK test: a generation
+progress event does not prove that the SDK call has begun, and a fixed delay does
+not prove it remains blocked. The test now waits for a synthetic entered marker
+and explicitly releases the fake SDK only after verifying Stop-pending and OS
+ownership. These disposable barriers affect test fixtures only; no production
+sleep, polling, cancellation, browser or locking behavior was changed.
+
+Final verification: 64 focused worker/protocol/locking tests passed in 17.655
+seconds, and the corrected blocked-SDK barrier regression passed five consecutive
+runs in 5.308 seconds. A broader cancellation, CLI, launcher, runner and existing
+GUI regression selection passed 327 tests in 184.641 seconds. The final complete
+offline suite passed 1,551 tests in 431.015 seconds with no failures or skips;
+all 82 Python source/test files matched the snapshot captured before that run.
+Four publication-security tests, Python compilation, three unchanged embedded
+observer JavaScript syntax checks and Git whitespace checks passed. AST comparison
+confirmed the existing CLI/runner bodies changed only through ownership
+decorators/imports; the GUI/Preview, state schema, browser, download, launcher and
+progress modules remain unchanged. No existing regression tests were weakened or
+removed. Windows lock/process probes were performed offline; POSIX fallback and
+real Flow worker operation are not claimed as live acceptance.

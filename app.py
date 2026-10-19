@@ -14,6 +14,7 @@ from nano_batch.batch import (
     single_prompt_batch,
 )
 from nano_batch.cancellation import authoritative_cancellation_scope, interruptible_call
+from nano_batch.execution_lock import exclusive_cli
 from nano_batch.errors import PolicyGenerationRejected, TemporaryGenerationBlock, WAITING_FOR_FLOW_LIMIT_RESET
 from nano_batch.models import Batch, GenerationSettings
 from nano_batch.launcher import (
@@ -150,6 +151,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_run(args: argparse.Namespace) -> int:
     batch = load_batch(Path(args.batch))
     run_dir = Path(args.run_dir) if args.run_dir else _default_run_dir(batch.batch_id)
@@ -405,6 +407,7 @@ def _run_sequential_command(
     return 0
 
 
+@exclusive_cli
 def cmd_run_batch(args: argparse.Namespace) -> int:
     return _run_sequential_command(load_batch(Path(args.batch)), args)
 
@@ -416,6 +419,7 @@ def _configure_unicode_cli_output() -> None:
             reconfigure(encoding="utf-8")
 
 
+@exclusive_cli
 def cmd_run_prompt(args: argparse.Namespace) -> int:
     _configure_unicode_cli_output()
     batch = single_prompt_batch(args.prompt)
@@ -427,6 +431,7 @@ def cmd_run_prompt(args: argparse.Namespace) -> int:
     )
 
 
+@exclusive_cli
 def cmd_run_prompts_file(args: argparse.Namespace) -> int:
     _configure_unicode_cli_output()
     prompts_path = Path(args.prompts_file)
@@ -581,6 +586,7 @@ def _print_order_candidate_repair_plan(plan) -> None:
     print(f"  unchanged ({len(plan.canonical_assets)} file(s))")
 
 
+@exclusive_cli
 def cmd_repair_order_candidates(args: argparse.Namespace) -> int:
     batch = load_batch(Path(args.batch))
     run_dir = Path(args.run_dir) if args.run_dir else _default_run_dir(batch.batch_id)
@@ -600,18 +606,21 @@ def cmd_repair_order_candidates(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_open_flow(args: argparse.Namespace) -> int:
     config = _load_config(args.config)
     _flow_session_from_args(args, config).open_for_manual_reconnaissance()
     return 0
 
 
+@exclusive_cli
 def cmd_open_flow_debug(args: argparse.Namespace) -> int:
     config = _load_config(args.config)
     _flow_session_from_args(args, config).open_for_debugging()
     return 0
 
 
+@exclusive_cli
 def cmd_inspect_flow(args: argparse.Namespace) -> int:
     config = _load_config(args.config)
     settings = _generation_settings(config)
@@ -630,6 +639,7 @@ def cmd_inspect_flow(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_inspect_flow_project_ui(args: argparse.Namespace) -> int:
     config = _load_config(args.config)
     session = _flow_session_from_args(args, config)
@@ -646,6 +656,7 @@ def cmd_inspect_flow_project_ui(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_inspect_current_flow_project(args: argparse.Namespace) -> int:
     config = _load_config(args.config)
     session = _flow_session_from_args(args, config)
@@ -662,6 +673,7 @@ def cmd_inspect_current_flow_project(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_inspect_flow_download_layout(args: argparse.Namespace) -> int:
     config = _load_config(args.config)
     session = _flow_session_from_args(args, config)
@@ -678,6 +690,7 @@ def cmd_inspect_flow_download_layout(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_inspect_flow_model_menu(args: argparse.Namespace) -> int:
     config = _load_config(args.config)
     session = _flow_session_from_args(args, config)
@@ -723,6 +736,7 @@ def _print_existing_preview_state(batch, item, run_dir: Path) -> None:
         print("Future real execution requires --retry; preview does not change this state.")
 
 
+@exclusive_cli
 def cmd_generate_one(args: argparse.Namespace) -> int:
     batch = load_batch(Path(args.batch))
     config = _load_config(args.config)
@@ -779,6 +793,7 @@ def cmd_generate_one(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_download_one(args: argparse.Namespace) -> int:
     batch = load_batch(Path(args.batch))
     run_dir = Path(args.run_dir) if args.run_dir else _default_run_dir(batch.batch_id)
@@ -843,6 +858,7 @@ def cmd_download_one(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_trace_download_trigger(args: argparse.Namespace) -> int:
     if args.variant != 1:
         raise ValueError("This bounded diagnostic is restricted to candidate v01.")
@@ -928,6 +944,7 @@ def cmd_trace_download_trigger(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_trace_download_manual(args: argparse.Namespace) -> int:
     """Observe one user-performed Download interaction without dispatching UI input."""
     if args.variant != 1:
@@ -1023,6 +1040,7 @@ def cmd_trace_download_manual(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_inspect_download_submenu(args: argparse.Namespace) -> int:
     """Inspect a manually exposed Download submenu without dispatching UI input."""
     if args.variant != 1:
@@ -1107,6 +1125,7 @@ def cmd_inspect_download_submenu(args: argparse.Namespace) -> int:
     return 0
 
 
+@exclusive_cli
 def cmd_probe_download_ui(args: argparse.Namespace) -> int:
     """Measure candidate menu readiness and stop before final 1K activation."""
     if args.variant != 1:
