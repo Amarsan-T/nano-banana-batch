@@ -17,6 +17,7 @@ from .worker_protocol import validate_message
 from .entry_shortcuts import EditingEntry
 from .runtime_paths import config_path, frozen, prepare_data_home
 from .packaged_tools import CompanionAction
+from .setup_diagnostics import setup_code_details, setup_guidance
 
 
 _PHASES = {
@@ -343,7 +344,12 @@ class PreviewWindow:
             self.status.set(_GUIDANCE[data["code"]])
         if data["code"] == "STALE_PREVIEW":
             self.status.set(ERROR_MESSAGES["changed"])
-        self.diagnostics.set(f"Safe diagnostics: outcome={data['outcome']} exit={data['exit_code']} code={data['code'] or 'none'}")
+        guidance = setup_guidance(data["code"])
+        if guidance is not None:
+            self.status.set(guidance)
+        details = setup_code_details(data["code"])
+        setup = f" stage={details[0].value} category={details[1].value}" if details else ""
+        self.diagnostics.set(f"Safe diagnostics: outcome={data['outcome']} exit={data['exit_code']} code={data['code'] or 'none'}{setup}")
         if self._close_when_done:
             self._destroy()
 

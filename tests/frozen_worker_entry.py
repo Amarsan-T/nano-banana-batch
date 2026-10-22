@@ -89,8 +89,15 @@ def main():
         os.write(1, b'{"v":1,"type":"ready"}\n')
         return 9
     import nano_batch.gui_worker as worker
+    if mode in {"setup_project", "setup_driver", "setup_reconnect", "setup_editor", "setup_settings", "setup_cleanup"}:
+        from setup_diagnostics_fixtures import SyntheticSetupSession
+        adapter_factory = lambda *_args: SyntheticSetupSession(
+            Path(os.environ["NBB_FROZEN_TEST_ROOT"]) / "synthetic-profile", mode.removeprefix("setup_"),
+        )
+    else:
+        adapter_factory = lambda *_args: SyntheticAdapter()
     original = worker.serve
-    worker.serve = lambda source, write: original(source, write, adapter_factory=lambda *_args: SyntheticAdapter())
+    worker.serve = lambda source, write: original(source, write, adapter_factory=adapter_factory)
     return worker.main()
 
 

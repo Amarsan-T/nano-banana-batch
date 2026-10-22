@@ -374,6 +374,21 @@ Packaged live Flow acceptance and clean-machine verification remain pending.
    fixed phases, numeric counts and allowlisted codes; raw CLI/SDK output is not
    forwarded. Use existing CLI diagnostics if further recovery review is needed.
 
+Setup failures can report `SETUP_<STAGE>_<CATEGORY>` in **Safe diagnostics**,
+with a short corrective hint. Stages distinguish worker initialization, project
+preparation, driver startup, project reconnection, editor readiness, settings
+verification and pre-Start cleanup. Categories describe only the escaping error
+type: invalid input, unavailable resource, I/O or other operation failure. They
+do not establish the underlying browser cause or prove whether Start occurred.
+Keep the run unchanged and record the safe code; do not use Retry merely to
+diagnose it. Preview checks local data, not browser readiness. Existing specific
+failure codes and cancellation semantics remain unchanged.
+
+The reported internal packaged failure after project persistence and before the
+first recorded attempt is still unexplained. These diagnostics require a **new
+complete packaged build**; do not mix old GUI/worker executables with new ones.
+No new live Flow test was performed for this diagnostic change.
+
 The source GUI reads repository-local `config.json` through the same browser-free
 parsing helpers as the CLI; absence uses existing defaults. The internal frozen
 GUI uses its separate application-data configuration as documented above. The text workflow always

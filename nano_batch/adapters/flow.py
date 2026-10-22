@@ -58,6 +58,7 @@ from ..models import (
     GenerationResult,
     GenerationSettings,
 )
+from ..setup_diagnostics import SetupStage, setup_stage, setup_step
 
 
 class FlowAutomationError(RuntimeError):
@@ -4996,6 +4997,7 @@ class FlowSession:
             "home. No project-creation click occurred."
         )
 
+    @setup_step(SetupStage.RECONNECT)
     def _open_current_flow_page_for_project_operation(self) -> "FlowSession":
         """Attach to the one current Flow tab and apply existing production hardening."""
         self.open_read_only_project_reconnaissance()
@@ -5164,6 +5166,7 @@ class FlowSession:
         finally:
             self.close(intentional_cancellation=cancellation_requested())
 
+    @setup_step(SetupStage.RECONNECT)
     def prepare_flow_project(
         self,
         *,
@@ -5201,8 +5204,10 @@ class FlowSession:
                 require_semantic_surface=False,
             )
             if settings is not None:
-                inspection = self._wait_for_authenticated_image_editor(project)
-                self.configure_generation(settings, inspection=inspection)
+                with setup_stage(SetupStage.EDITOR):
+                    inspection = self._wait_for_authenticated_image_editor(project)
+                with setup_stage(SetupStage.SETTINGS):
+                    self.configure_generation(settings, inspection=inspection)
         finally:
             self.close(intentional_cancellation=cancellation_requested())
 
@@ -5330,9 +5335,11 @@ class FlowSession:
         """Attach to exactly one Flow tab without focus, lifecycle, or page actions."""
         if self.page is not None:
             return self
-        sync_playwright = self._playwright_api()
+        with setup_stage(SetupStage.DRIVER):
+            sync_playwright = self._playwright_api()
         try:
-            self._playwright = sync_playwright().start()
+            with setup_stage(SetupStage.DRIVER):
+                self._playwright = sync_playwright().start()
         except KeyboardInterrupt:
             self.close(intentional_cancellation=True)
             raise
@@ -5403,6 +5410,7 @@ class FlowSession:
             ):
                 future.exception()
 
+    @setup_step(SetupStage.CLEANUP)
     def close(self, *, intentional_cancellation: bool = False) -> None:
         # Existing session detach/disconnect owns domain teardown at close.
         self._stop_generation_network_timing(skip_rpc=True)

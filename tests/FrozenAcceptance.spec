@@ -1,7 +1,7 @@
 # TEST-ONLY bundle; never collect it into the application output directory.
 from pathlib import Path
 root = Path(SPECPATH).parent
-a = Analysis([str(root / "tests/frozen_worker_entry.py")], pathex=[str(root)],
+a = Analysis([str(root / "tests/frozen_worker_entry.py")], pathex=[str(root), str(root / "tests")],
              hiddenimports=["app", "nano_batch.gui_worker", "playwright.sync_api"],
              excludes=["pytest"], binaries=[], datas=[], optimize=0)
 pyz = PYZ(a.pure)

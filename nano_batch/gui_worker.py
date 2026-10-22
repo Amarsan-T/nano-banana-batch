@@ -20,6 +20,7 @@ from .worker_protocol import (
     message, preview_message, progress_message,
 )
 from .worker_transport import MessageBuffer
+from .setup_diagnostics import collect_setup_diagnostics, setup_failure_code
 
 
 class StopBridge:
@@ -92,7 +93,8 @@ def run_job(request: JobRequest | StopRequest, offer, stop: StopBridge, *, adapt
     reporter = None
     total = completed = 0
     outcome, exit_code, code = "failed", 2, "OPERATION_FAILED"
-    with authoritative_cancellation_scope(cooperative_stop=stop.event):
+    worker_initializing = True
+    with collect_setup_diagnostics(), authoritative_cancellation_scope(cooperative_stop=stop.event):
         try:
             cancellation_checkpoint("worker_dispatch")
             if isinstance(request, StopRequest):
@@ -136,6 +138,7 @@ def run_job(request: JobRequest | StopRequest, offer, stop: StopBridge, *, adapt
                     reporter = ProgressReporter(tuple(item.order for item in batch.items),
                                                 lambda snapshot: offer(progress_message(snapshot)))
                     with windows_execution_state_guard(enabled=isinstance(adapter, app.FlowSession)):
+                        worker_initializing = False
                         interruptible_call(
                             "worker_execution", "execute_sequential_batch", execute_sequential_batch,
                             batch, run_dir, adapter, settings,
@@ -158,6 +161,8 @@ def run_job(request: JobRequest | StopRequest, offer, stop: StopBridge, *, adapt
             )
         except Exception as exc:
             code = _error_code(exc)
+            if code == "OPERATION_FAILED":
+                code = setup_failure_code(exc, worker_initializing=worker_initializing) or code
             outcome, exit_code = (
                 ("waiting", 3) if getattr(exc, "state_status", None) == "waiting_for_flow_limit_reset" else
                 ("blocked", 2) if code in {"FLOW_FAILURE_ATTRIBUTION_AMBIGUOUS", "CANDIDATE_UUID_OWNERSHIP_CONFLICT"} else

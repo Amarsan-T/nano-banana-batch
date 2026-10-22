@@ -61,6 +61,7 @@ from .models import (
     RunState,
 )
 from .execution_lock import exclusive_run
+from .setup_diagnostics import SetupStage, setup_step
 from .state import RunStateStore
 from .progress import (
     ProgressPhase, ProgressReporter, flush_progress, progress_scope,
@@ -2421,6 +2422,7 @@ def _execute_generation_with_automatic_retries(
             next_resume_policy_retry = False
 
 
+@setup_step(SetupStage.PROJECT, requires_active=False)
 def _prepare_sequential_flow_project(
     batch: Batch,
     run_dir: Path,

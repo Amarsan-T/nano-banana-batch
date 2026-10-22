@@ -9,12 +9,13 @@ from enum import Enum
 
 from .preview import PreviewState, PreviewView
 from .progress import ProgressPhase, ProgressSnapshot, _SAFE_CODES
+from .setup_diagnostics import SETUP_FAILURE_CODES
 
 
 VERSION = 1
 MAX_FRAME = 8192
 _MAX_NUMBER = 2**53 - 1
-_CODES = _SAFE_CODES | {
+_CODES = _SAFE_CODES | SETUP_FAILURE_CODES | {
     "OPERATION_FAILED", "INVALID_INPUT", "PROTOCOL_ERROR", "CHANNEL_LOST",
     "WORKER_LOST", "OWNERSHIP_BUSY", "OWNERSHIP_UNAVAILABLE", "STALE_PREVIEW",
 }

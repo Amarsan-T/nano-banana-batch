@@ -3189,3 +3189,78 @@ intermediate builds, dependency wheels and environments remain ignored. Only
 reviewed source, tests, build definitions, notices and documentation are eligible
 for the authorized normal fast-forward source publication; no executable, archive
 or GitHub Release is published.
+
+## Stage 5B — privacy-safe setup failure diagnostics (2026-10-22)
+
+The developer reported that the internal packaged GUI started, prepared data,
+launched dedicated Chrome for manual authentication and produced a fresh Preview,
+but confirmed execution returned `failed`, exit 2, `OPERATION_FAILED`. Earlier
+explicitly authorized read-only inspection established valid configuration and
+profile/endpoint parity, a durable batch-owned project, and one pending Order with
+zero attempts, no Start/completion timestamp, candidates, downloads, outputs or
+saved error. This locates the recorded failure after project persistence and
+before the first recorded attempt; it does not establish the exact cause. The
+developer authorized diagnostic specificity rather than a speculative behavior
+fix. No real artifact was reread or retried during this implementation.
+
+Codex added invocation-local observation at existing worker/project setup
+boundaries. Seven fixed stages distinguish worker initialization, project
+preparation, driver startup, project reconnection, editor readiness, settings
+verification and pre-Start cleanup. Four categories classify only the escaping
+exception type, not a verified browser root cause. Twenty-eight exact codes use
+the existing private protocol field, with fixed GUI guidance and stage/category
+labels. Raw exceptions, prompts, UUIDs, URLs, authentication data and paths are
+not diagnostic payloads. Existing specific codes take precedence; an ordinary
+later generation failure remains ordinary. The CLI classifier is unchanged.
+
+The original exception is rethrown without mutation. Nested boundaries retain
+the innermost stage for that exception; a replacing cleanup exception follows
+existing Python semantics. Reporting errors fall back to generic handling.
+Cancellation still takes precedence with exit 130. No new browser call, DOM read,
+poll, state field, checkpoint, retry authorization or generation/download change
+was introduced. Worker stdout/stderr isolation and protocol version/fields remain
+intact. Older decoders reject the added code values, so a new complete internal
+build is required; mixing executable versions is unsupported.
+
+Regression-first evidence: six synthetic worker tests failed on the original
+implementation because all reported `OPERATION_FAILED`; all six passed after the
+correction. The expanded 27-test diagnostic suite also covers failures before
+project creation and after durable persistence, existing-project reconnection,
+initialization, state-save failure, unchanged saved bytes/timestamps, zero
+submissions, unchanged retry budgets, cancellation, reporting faults, safe GUI
+presentation and strict protocol validation. The synthetic generation control
+explicitly replaces Flow's inherited same-session generation entry point; no
+real adapter submission is used.
+
+Final verification passed 1,692 full-suite tests and 279 focused setup, GUI,
+worker, project and cancellation regressions, with zero failures, errors or skips.
+Both guarded runs recorded no existing runtime-data access, browser/driver launch
+or endpoint-connection attempts. Messages about Chrome in mocked launcher tests
+were synthetic output, not real launches. All 96 source/test file hashes still
+matched the verification snapshot. Static comparison also confirmed unchanged
+runner function bodies, Flow text/JavaScript constants and the protected state,
+download, cancellation, CLI-classification and transport modules.
+
+A fresh, separate test-only Windows worker passed ten frozen checks: six setup
+failure boundaries with exact version-1 frames, safe output, zero attempts and
+unchanged retry budgets; crash/malformed-output handling; pre-job Stop (130); and
+unchanged inputs/no implicit data preparation. Child PATH excluded Python/Node.
+The first disposable build hit the documented Windows path-length limit; a fresh
+shorter ignored output path succeeded without source changes or replacement of
+the existing application build. The test bundle's 1,124 files and compiled-code
+constants passed the existing privacy checks; no real profile or run was bundled.
+This is synthetic frozen-worker verification, not packaged Flow acceptance.
+
+Python compilation, three unchanged embedded JavaScript syntax checks, four
+publication-security checks and Git whitespace checks passed. The reviewed scope
+contains only source, synthetic test/build definitions and documentation. No
+application executable was rebuilt or distributed by this diagnostic task.
+
+The packaged failure remains unexplained until the developer separately chooses
+to test a rebuilt application and reports its safe code. This change itself has
+no real Flow acceptance. It neither authorizes another submission nor repairs or
+adopts an existing result. Blocking SDK calls can still delay Stop; ambiguous
+ownership, unsupported minimized Chrome, filesystem races and existing recovery
+limitations remain. No private checkout, authenticated profile, real run, browser
+session or generated image was accessed. Test-only binaries remain local/ignored;
+no binary artifact or GitHub Release is published.

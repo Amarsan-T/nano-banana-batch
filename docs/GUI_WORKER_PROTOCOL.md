@@ -91,6 +91,38 @@ process exit are required; trailing output, a crash or exit mismatch reports los
 communication. There is no automatic worker restart, generation retry or state
 adoption. Pipe loss requests cooperative Stop where the channel still works.
 
+## Setup failure codes
+
+The exact `code` allowlist also contains 28 combinations of
+`SETUP_<STAGE>_<CATEGORY>` in the existing field. Stage tokens are `WORKER`,
+`PROJECT`, `DRIVER`, `RECONNECT`, `EDITOR`, `SETTINGS` and `CLEANUP`; category
+tokens are `INVALID_INPUT`, `RESOURCE`, `IO` and `OPERATION`. The GUI maps these
+to fixed stage/category labels and short guidance. No exception text or new
+payload field is sent. Version 1, exact field validation, frame limits, outcomes
+and exit codes remain unchanged. An older GUI rejects these new codes, so
+rebuild/deploy all application components together; the new decoder still accepts
+the existing codes. This private allowlist extension is not mixed-version
+compatibility or a public schema change.
+
+Observation is invocation-local. Nested project setup boundaries label only the
+same exception that escapes to the worker's existing generic failure fallback.
+Worker initialization covers failures before runner dispatch. Driver startup is
+the existing import/start operation; project reconnection includes attachment to
+the selected Flow tab and preparation of the saved project. Editor/settings and
+cleanup boundaries apply only within project preparation, not later generation
+or download work. Existing specific codes take precedence. Cancellation still
+wins with exit 130, including translated errors after Stop.
+
+Categories reflect only the escaping Python exception type: `ImportError` and
+`FileNotFoundError` are resource failures; `ValueError`/`TypeError` are invalid
+input; other `OSError` values are I/O; others are operation failures. A wrapped
+browser error may therefore retain the generic operation category. A cleanup
+exception can supersede an earlier error under normal Python semantics; the code
+does not claim to identify that earlier root cause. Recording failure falls back
+to existing generic handling. No exception, retry decision, saved state or browser
+operation is changed by reporting. A setup label alone is not submission or
+ownership evidence and never authorizes Retry or reconciliation.
+
 ## Stop and cleanup
 
 The control reader changes only a threading Event. Existing cancellation checks
